@@ -1,0 +1,15 @@
+bin/
+dist/
+.gocache/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+coverage.out
+.idea/
+.vscode/
+Thumbs.db
+Desktop.ini
+*.log
+test.png
