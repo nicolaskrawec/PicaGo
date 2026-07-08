@@ -95,6 +95,7 @@ function New-WindowsResource {
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $resolvedVersion = Get-BuildVersion -ExplicitVersion $Version
 $binaryName = "PicaGo"
+$stableWindowsBinaryPath = Join-Path (Join-Path $projectRoot $OutputDir) "PicaGo.exe"
 $ldflagsBase = @(
     "-s",
     "-w",
@@ -129,6 +130,13 @@ foreach ($target in $Targets) {
     $env:GOARCH = $goarch
     $env:CGO_ENABLED = "0"
     go build -trimpath -buildvcs=false -ldflags ($ldflags -join " ") -o $outputPath .
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build echoue pour $target"
+    }
+
+    if ($goos -eq "windows" -and $goarch -eq "amd64") {
+        Copy-Item -LiteralPath $outputPath -Destination $stableWindowsBinaryPath -Force
+    }
 }
 
 Remove-Item Env:GOOS -ErrorAction SilentlyContinue

@@ -159,3 +159,31 @@ The `internal/assets/icon.ico` file is used:
 
 - as the application window icon
 - as the Windows `.exe` file icon during build
+
+For `windows/amd64`, the build also writes a stable `dist/PicaGo.exe` file in addition to the versioned artifact, which is useful for packaging and local testing.
+
+## Windows Installer
+
+PicaGo can be packaged as a Windows installer with:
+
+```powershell
+.\scripts\build-installer.ps1
+```
+
+This script:
+
+- builds `dist/PicaGo.exe`
+- compiles an Inno Setup installer into `dist/installer`
+- installs the app with the embedded icon
+- registers PicaGo as a handler for supported image formats
+
+Requirements:
+
+- Inno Setup 6 installed
+- `ISCC.exe` available in `PATH` or in the default Inno Setup install directory
+
+Notes about default file opening on Windows 10/11:
+
+- the installer registers PicaGo properly for supported extensions
+- Windows may still require a user confirmation in `Default apps`
+- the installer includes an optional checkbox to open the Windows default apps settings at the end
