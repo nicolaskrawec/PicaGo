@@ -29,6 +29,8 @@ const (
 	displayModeCompare
 )
 
+const idleFrameDelay = 500 * time.Millisecond
+
 var Version = "dev"
 
 func windowTitle(imageName string) string {
@@ -62,6 +64,7 @@ type Viewer struct {
 	slider                compare.Slider
 	sliderInitialized     bool
 	sliderOpacity         float64
+	showShadow            bool
 	showHelp              bool
 	reverseCompare        bool
 	syncSliderWithImage   bool
@@ -91,6 +94,11 @@ type Viewer struct {
 	lastImageClickAt         time.Time
 	lastImageClickX          int
 	lastImageClickY          int
+	lastActivityAt           time.Time
+	idleFPSMode              bool
+	idleMouseTracked         bool
+	idleMouseX               int
+	idleMouseY               int
 	viewAnimationActive      bool
 	viewAnimationStart       time.Time
 	viewAnimationLength      time.Duration
@@ -106,6 +114,8 @@ func Run(args []string) error {
 		windowWidth:         640,
 		windowHeight:        480,
 		slider:              compare.Slider{Orientation: compare.OrientationVertical},
+		lastActivityAt:      time.Now(),
+		showShadow:          true,
 		syncSliderWithImage: true,
 		animateInitialFit:   true,
 	}
@@ -137,6 +147,8 @@ func Run(args []string) error {
 }
 
 func (v *Viewer) Update() error {
+	now := time.Now()
+
 	if v.pendingInitialBorderless {
 		v.enterFromNativeMaximize = false
 		v.pendingEnterFullscreen = true
@@ -209,6 +221,9 @@ func (v *Viewer) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyL) {
 		v.syncSliderWithImage = !v.syncSliderWithImage
 	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
+		v.showShadow = !v.showShadow
+	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
 		v.toggleBorderlessMaximized()
 	}
@@ -218,9 +233,18 @@ func (v *Viewer) Update() error {
 	leftMousePressed := ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
 	rightMousePressed := ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight)
 	mouseX, mouseY := ebiten.CursorPosition()
+	mouseMoved := false
+	if v.idleMouseTracked {
+		mouseMoved = mouseX != v.idleMouseX || mouseY != v.idleMouseY
+	} else {
+		v.idleMouseTracked = true
+	}
+	v.idleMouseX = mouseX
+	v.idleMouseY = mouseY
 	mouseOutsideWindow := mouseX < 0 || mouseY < 0 || mouseX >= v.windowWidth || mouseY >= v.windowHeight
 	if v.ignoreMouseUntilRelease {
 		if leftMousePressed || rightMousePressed {
+			v.updateFramePacing(now, true)
 			return nil
 		}
 		v.ignoreMouseUntilRelease = false
@@ -372,11 +396,9 @@ func (v *Viewer) Update() error {
 	if ebiten.IsKeyPressed(ebiten.Key2) && v.imageB != nil {
 		v.mode = displayModeSingleB
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyS) && v.imageB != nil {
-		v.mode = displayModeCompare
-	}
 
 	v.updateCursorShape(mouseX, mouseY, imageRect, imageReady)
+	v.updateFramePacing(now, v.shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed))
 
 	return nil
 }
@@ -397,9 +419,9 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 
 	switch v.mode {
 	case displayModeSingleA:
-		render.DrawImage(screen, v.imageA, v.windowWidth, v.windowHeight, v.view)
+		render.DrawImage(screen, v.imageA, v.windowWidth, v.windowHeight, v.view, v.showShadow)
 	case displayModeSingleB:
-		render.DrawImage(screen, v.imageB, v.windowWidth, v.windowHeight, v.view)
+		render.DrawImage(screen, v.imageB, v.windowWidth, v.windowHeight, v.view, v.showShadow)
 	case displayModeCompare:
 		v.restoreSliderAfterResize()
 		v.ensureSliderPosition()
@@ -414,6 +436,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 			int(v.slider.Orientation),
 			v.reverseCompare,
 			v.sliderOpacity,
+			v.showShadow,
 		)
 	}
 	if v.borderlessMaximized {
@@ -901,6 +924,75 @@ func (v *Viewer) animateView() {
 	}
 }
 
+func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed bool) bool {
+	if mouseMoved || leftMousePressed || rightMousePressed || v.draggingImage || v.draggingSlider || v.restoreClickPending {
+		return true
+	}
+
+	if v.pendingInitialBorderless || v.pendingEnterFullscreen || v.pendingResetFit || v.pendingSliderRestore || v.pendingViewportRebase {
+		return true
+	}
+
+	if v.viewAnimationActive {
+		return true
+	}
+
+	if !viewAlmostEqual(v.view, v.targetView) {
+		return true
+	}
+
+	if v.sliderOpacity > 0 && v.sliderOpacity < 1 {
+		return true
+	}
+
+	return ebiten.IsKeyPressed(ebiten.KeyEscape) ||
+		ebiten.IsKeyPressed(ebiten.KeyR) ||
+		ebiten.IsKeyPressed(ebiten.KeyArrowLeft) ||
+		ebiten.IsKeyPressed(ebiten.KeyArrowRight) ||
+		ebiten.IsKeyPressed(ebiten.KeyArrowUp) ||
+		ebiten.IsKeyPressed(ebiten.KeyArrowDown) ||
+		ebiten.IsKeyPressed(ebiten.KeyF1) ||
+		ebiten.IsKeyPressed(ebiten.KeyH) ||
+		ebiten.IsKeyPressed(ebiten.KeyV) ||
+		ebiten.IsKeyPressed(ebiten.KeyM) ||
+		ebiten.IsKeyPressed(ebiten.KeySemicolon) ||
+		ebiten.IsKeyPressed(ebiten.KeyL) ||
+		ebiten.IsKeyPressed(ebiten.KeyS) ||
+		ebiten.IsKeyPressed(ebiten.KeyF11) ||
+		ebiten.IsKeyPressed(ebiten.KeyC) ||
+		ebiten.IsKeyPressed(ebiten.Key1) ||
+		ebiten.IsKeyPressed(ebiten.Key2)
+}
+
+func (v *Viewer) updateFramePacing(now time.Time, active bool) {
+	if active {
+		v.lastActivityAt = now
+		if v.idleFPSMode {
+			ebiten.SetFPSMode(ebiten.FPSModeVsyncOn)
+			v.idleFPSMode = false
+		}
+		return
+	}
+
+	if v.lastActivityAt.IsZero() {
+		v.lastActivityAt = now
+		return
+	}
+
+	if !v.idleFPSMode && now.Sub(v.lastActivityAt) >= idleFrameDelay {
+		ebiten.SetFPSMode(ebiten.FPSModeVsyncOffMinimum)
+		v.idleFPSMode = true
+	}
+}
+
+func viewAlmostEqual(a, b render.View) bool {
+	return math.Abs(a.Zoom-b.Zoom) < 0.001 &&
+		math.Abs(a.OffsetX-b.OffsetX) < 0.001 &&
+		math.Abs(a.OffsetY-b.OffsetY) < 0.001 &&
+		math.Abs(a.Alpha-b.Alpha) < 0.001 &&
+		a.FlipHorizontal == b.FlipHorizontal
+}
+
 func (v *Viewer) startViewAnimation(from, to render.View, duration, delay time.Duration) {
 	now := time.Now()
 	v.viewAnimationActive = true
@@ -1146,5 +1238,10 @@ func (v *Viewer) helpText() string {
 		syncMode = "on"
 	}
 
-	return "PicaGo " + Version + "\nF1 aide\nH : split horizontal\nV : split vertical\nM : miroir\nL : slide sync " + syncMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	shadowMode := "off"
+	if v.showShadow {
+		shadowMode = "on"
+	}
+
+	return "PicaGo " + Version + "\nF1 aide\nH : split horizontal\nV : split vertical\nM : miroir\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }

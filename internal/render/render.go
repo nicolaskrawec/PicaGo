@@ -42,18 +42,20 @@ func ImageRect(windowWidth, windowHeight, imageWidth, imageHeight int, zoom, off
 	)
 }
 
-func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth, windowHeight int, view View) {
+func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth, windowHeight int, view View, showShadow bool) {
 	if loaded == nil || loaded.GPUTexture == nil {
 		return
 	}
 
 	rect := ImageRect(windowWidth, windowHeight, loaded.Width, loaded.Height, view.Zoom, view.OffsetX, view.OffsetY)
-	drawShadow(screen, rect, view.Alpha)
+	if showShadow {
+		drawShadow(screen, rect, view.Alpha)
+	}
 	drawTexture(screen, loaded.GPUTexture, rect, view.FlipHorizontal, view.Alpha)
 }
 
-func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, sliderPosition float64, orientation int, reverse bool, sliderOpacity float64) {
-	DrawImage(screen, imageA, windowWidth, windowHeight, view)
+func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, sliderPosition float64, orientation int, reverse bool, sliderOpacity float64, showShadow bool) {
+	DrawImage(screen, imageA, windowWidth, windowHeight, view, showShadow)
 	if imageA == nil || imageB == nil || imageB.GPUTexture == nil {
 		return
 	}
@@ -215,10 +217,10 @@ func drawShadow(screen *ebiten.Image, rect stdimage.Rectangle, alpha float64) {
 	}
 
 	visibleSize := math.Min(rectWidth, rectHeight)
-	spread := clampFloat32(float32(visibleSize*0.3), 8, 500)
+	spread := clampFloat32(float32(visibleSize*0.08), 8, 500)
 	edgePadding := clampFloat32(spread*0.015625, 1, 2)
-	const layers = 64
-	const maxOpacity = 0.3
+	const layers = 16
+	const maxOpacity = 0.2
 
 	prevOpacity := 0.0
 	for i := 0; i < layers; i++ {
@@ -227,7 +229,7 @@ func drawShadow(screen *ebiten.Image, rect stdimage.Rectangle, alpha float64) {
 		targetOpacity := t * maxOpacity
 		layerAlpha := alphaStep(prevOpacity, targetOpacity) * shadowAlpha
 		prevOpacity = targetOpacity
-		drawRoundedShadowLayer(screen, rect, padding, 0, spread*0.9, layerAlpha)
+		drawRoundedShadowLayer(screen, rect, padding, 0, spread*2, layerAlpha)
 	}
 }
 
