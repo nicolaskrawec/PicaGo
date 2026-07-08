@@ -114,6 +114,9 @@ func (v *Viewer) Update() error {
 		v.enterBorderlessMaximized()
 		v.pendingInitialBorderless = false
 	}
+	if !v.borderlessMaximized && ebiten.IsWindowMaximized() {
+		v.enterBorderlessMaximized()
+	}
 
 	if dropped := ebiten.DroppedFiles(); dropped != nil {
 		_ = fs.WalkDir(dropped, ".", func(path string, d fs.DirEntry, err error) error {
@@ -180,6 +183,10 @@ func (v *Viewer) Update() error {
 	}
 
 	if leftMousePressed && !v.leftMouseDown {
+		if v.borderlessMaximized && pointInTopRightCorner(mouseX, mouseY, v.windowWidth, 10) {
+			os.Exit(0)
+		}
+
 		if !imageReady {
 			v.leftMouseDown = true
 			return nil
@@ -376,6 +383,9 @@ func (v *Viewer) restoreWindow() {
 	v.targetView.OffsetX = 0
 	v.targetView.OffsetY = 0
 
+	if ebiten.IsFullscreen() {
+		ebiten.SetFullscreen(false)
+	}
 	ebiten.SetWindowDecorated(true)
 	if ebiten.IsWindowMaximized() {
 		ebiten.RestoreWindow()
@@ -400,8 +410,8 @@ func (v *Viewer) enterBorderlessMaximized() {
 
 	v.captureWindowedState()
 
-	ebiten.SetWindowDecorated(false)
-	ebiten.MaximizeWindow()
+	ebiten.SetWindowDecorated(true)
+	ebiten.SetFullscreen(true)
 
 	v.borderlessMaximized = true
 	v.leftMouseDown = false
@@ -529,6 +539,13 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 
 func pointInRect(x, y int, rect stdimage.Rectangle) bool {
 	return x >= rect.Min.X && x < rect.Max.X && y >= rect.Min.Y && y < rect.Max.Y
+}
+
+func pointInTopRightCorner(x, y, width, tolerance int) bool {
+	if width <= 0 || tolerance <= 0 {
+		return false
+	}
+	return x >= width-tolerance && y >= 0 && y < tolerance
 }
 
 func absInt(value int) int {
