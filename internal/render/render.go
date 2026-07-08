@@ -11,8 +11,6 @@ import (
 	imagedata "viewergo/internal/image"
 )
 
-var compareMaskShader = mustCompareMaskShader()
-
 type View struct {
 	Zoom           float64
 	OffsetX        float64
@@ -50,15 +48,7 @@ func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth,
 
 	rect := ImageRect(windowWidth, windowHeight, loaded.Width, loaded.Height, view.Zoom, view.OffsetX, view.OffsetY)
 	drawShadow(screen, rect)
-	options := &ebiten.DrawImageOptions{}
-	if view.FlipHorizontal {
-		options.GeoM.Scale(-view.Zoom, view.Zoom)
-		options.GeoM.Translate(float64(rect.Min.X)+float64(loaded.Width)*view.Zoom, float64(rect.Min.Y))
-	} else {
-		options.GeoM.Scale(view.Zoom, view.Zoom)
-		options.GeoM.Translate(float64(rect.Min.X), float64(rect.Min.Y))
-	}
-	screen.DrawImage(loaded.GPUTexture, options)
+	drawTexture(screen, loaded.GPUTexture, rect, view.FlipHorizontal)
 }
 
 func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, sliderPosition float64, orientation int, reverse bool) {
@@ -68,51 +58,128 @@ func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, wi
 	}
 
 	rectA := ImageRect(windowWidth, windowHeight, imageA.Width, imageA.Height, view.Zoom, view.OffsetX, view.OffsetY)
+	rectB := compareRect(rectA, imageB.Width, imageB.Height)
 	switch orientation {
 	case 1:
 		visibleTop := clampBoundary(int(math.Ceil(sliderPosition)), rectA.Min.Y, rectA.Max.Y-1)
 		if visibleTop < rectA.Min.Y {
 			return
 		}
-		drawMaskedCompareImage(screen, imageB, rectA, view, visibleTop, true, reverse)
+		drawClippedCompareImage(screen, imageB.GPUTexture, rectB, visibleTop, true, reverse, view.FlipHorizontal)
 		vector.FillRect(screen, float32(rectA.Min.X), float32(visibleTop)-1, float32(rectA.Max.X-rectA.Min.X), 2, color.NRGBA{230, 230, 230, 96}, true)
 	default:
 		visibleLeft := clampBoundary(int(math.Ceil(sliderPosition)), rectA.Min.X, rectA.Max.X-1)
 		if visibleLeft < rectA.Min.X {
 			return
 		}
-		drawMaskedCompareImage(screen, imageB, rectA, view, visibleLeft, false, reverse)
+		drawClippedCompareImage(screen, imageB.GPUTexture, rectB, visibleLeft, false, reverse, view.FlipHorizontal)
 		vector.FillRect(screen, float32(visibleLeft)-1, float32(rectA.Min.Y), 2, float32(rectA.Max.Y-rectA.Min.Y), color.NRGBA{230, 230, 230, 96}, true)
 	}
 }
 
-func drawMaskedCompareImage(screen *ebiten.Image, imageB *imagedata.LoadedImage, rectA stdimage.Rectangle, view View, boundary int, horizontal bool, reverse bool) {
-	options := &ebiten.DrawRectShaderOptions{}
-	scale := math.Min(float64(rectA.Dx())/float64(imageB.Width), float64(rectA.Dy())/float64(imageB.Height))
-	drawWidth := float64(imageB.Width) * scale
-	drawHeight := float64(imageB.Height) * scale
-	left := float64(rectA.Min.X) + (float64(rectA.Dx())-drawWidth)/2
-	top := float64(rectA.Min.Y) + (float64(rectA.Dy())-drawHeight)/2
-	if view.FlipHorizontal {
-		options.GeoM.Scale(-scale, scale)
-		options.GeoM.Translate(left+drawWidth, top)
-	} else {
-		options.GeoM.Scale(scale, scale)
-		options.GeoM.Translate(left, top)
-	}
-	options.Uniforms = map[string]any{
-		"VisibleBoundary": float32(boundary),
-		"Orientation":     float32(0),
-		"Reverse":         float32(0),
-	}
+func compareRect(baseRect stdimage.Rectangle, imageWidth, imageHeight int) stdimage.Rectangle {
+	scale := math.Min(float64(baseRect.Dx())/float64(imageWidth), float64(baseRect.Dy())/float64(imageHeight))
+	drawWidth := float64(imageWidth) * scale
+	drawHeight := float64(imageHeight) * scale
+	left := float64(baseRect.Min.X) + (float64(baseRect.Dx())-drawWidth)/2
+	top := float64(baseRect.Min.Y) + (float64(baseRect.Dy())-drawHeight)/2
+	return stdimage.Rect(
+		int(math.Round(left)),
+		int(math.Round(top)),
+		int(math.Round(left+drawWidth)),
+		int(math.Round(top+drawHeight)),
+	)
+}
+
+func drawClippedCompareImage(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, boundary int, horizontal bool, reverse bool, flipHorizontal bool) {
+	visibleRect := destRect
 	if horizontal {
-		options.Uniforms["Orientation"] = float32(1)
+		if reverse {
+			visibleRect.Max.Y = minInt(visibleRect.Max.Y, boundary)
+		} else {
+			visibleRect.Min.Y = maxInt(visibleRect.Min.Y, boundary)
+		}
+	} else {
+		if reverse {
+			visibleRect.Max.X = minInt(visibleRect.Max.X, boundary)
+		} else {
+			visibleRect.Min.X = maxInt(visibleRect.Min.X, boundary)
+		}
 	}
-	if reverse {
-		options.Uniforms["Reverse"] = float32(1)
+
+	if visibleRect.Empty() {
+		return
 	}
-	options.Images[0] = imageB.GPUTexture
-	screen.DrawRectShader(imageB.Width, imageB.Height, compareMaskShader, options)
+
+	drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal)
+}
+
+func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal bool) {
+	if texture == nil || destRect.Empty() {
+		return
+	}
+
+	options := &ebiten.DrawImageOptions{}
+	options.Filter = ebiten.FilterLinear
+	scaleX := float64(destRect.Dx()) / float64(texture.Bounds().Dx())
+	scaleY := float64(destRect.Dy()) / float64(texture.Bounds().Dy())
+	if flipHorizontal {
+		options.GeoM.Scale(-scaleX, scaleY)
+		options.GeoM.Translate(float64(destRect.Max.X), float64(destRect.Min.Y))
+	} else {
+		options.GeoM.Scale(scaleX, scaleY)
+		options.GeoM.Translate(float64(destRect.Min.X), float64(destRect.Min.Y))
+	}
+
+	screen.DrawImage(texture, options)
+}
+
+func drawTextureClipped(screen *ebiten.Image, texture *ebiten.Image, destRect, visibleRect stdimage.Rectangle, flipHorizontal bool) {
+	if texture == nil || destRect.Empty() || visibleRect.Empty() {
+		return
+	}
+
+	texBounds := texture.Bounds()
+	leftSrc := mapRange(visibleRect.Min.X, destRect.Min.X, destRect.Max.X, texBounds.Min.X, texBounds.Max.X, flipHorizontal)
+	rightSrc := mapRange(visibleRect.Max.X, destRect.Min.X, destRect.Max.X, texBounds.Min.X, texBounds.Max.X, flipHorizontal)
+	topSrc := mapRange(visibleRect.Min.Y, destRect.Min.Y, destRect.Max.Y, texBounds.Min.Y, texBounds.Max.Y, false)
+	bottomSrc := mapRange(visibleRect.Max.Y, destRect.Min.Y, destRect.Max.Y, texBounds.Min.Y, texBounds.Max.Y, false)
+
+	vertices := []ebiten.Vertex{
+		{
+			DstX:   float32(visibleRect.Min.X),
+			DstY:   float32(visibleRect.Min.Y),
+			SrcX:   float32(leftSrc),
+			SrcY:   float32(topSrc),
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+		},
+		{
+			DstX:   float32(visibleRect.Max.X),
+			DstY:   float32(visibleRect.Min.Y),
+			SrcX:   float32(rightSrc),
+			SrcY:   float32(topSrc),
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+		},
+		{
+			DstX:   float32(visibleRect.Min.X),
+			DstY:   float32(visibleRect.Max.Y),
+			SrcX:   float32(leftSrc),
+			SrcY:   float32(bottomSrc),
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+		},
+		{
+			DstX:   float32(visibleRect.Max.X),
+			DstY:   float32(visibleRect.Max.Y),
+			SrcX:   float32(rightSrc),
+			SrcY:   float32(bottomSrc),
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1,
+		},
+	}
+	indices := []uint16{0, 1, 2, 1, 2, 3}
+	options := &ebiten.DrawTrianglesOptions{
+		Filter: ebiten.FilterLinear,
+	}
+	screen.DrawTriangles(vertices, indices, texture, options)
 }
 
 func clampBoundary(value, min, max int) int {
@@ -153,42 +220,28 @@ func drawShadow(screen *ebiten.Image, rect stdimage.Rectangle) {
 	}
 }
 
-func mustCompareMaskShader() *ebiten.Shader {
-	shader, err := ebiten.NewShader([]byte(`//kage:unit pixels
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
-package main
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
 
-var VisibleBoundary float
-var Orientation float
-var Reverse float
-
-func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
-	if Orientation < 0.5 {
-		if Reverse < 0.5 {
-			if dstPos.x < VisibleBoundary {
-				return vec4(0.0)
-			}
-		} else {
-			if dstPos.x > VisibleBoundary {
-				return vec4(0.0)
-			}
-		}
-	} else {
-		if Reverse < 0.5 {
-			if dstPos.y < VisibleBoundary {
-				return vec4(0.0)
-			}
-		} else {
-			if dstPos.y > VisibleBoundary {
-				return vec4(0.0)
-			}
-		}
+func mapRange(value, inMin, inMax, outMin, outMax int, reverse bool) float64 {
+	if inMax == inMin {
+		return float64(outMin)
 	}
 
-	return imageSrc0UnsafeAt(srcPos)
-}`))
-	if err != nil {
-		panic(err)
+	t := float64(value-inMin) / float64(inMax-inMin)
+	if reverse {
+		t = 1 - t
 	}
-	return shader
+	return float64(outMin) + t*float64(outMax-outMin)
 }
