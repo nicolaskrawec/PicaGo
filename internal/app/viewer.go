@@ -31,6 +31,14 @@ const (
 
 var Version = "dev"
 
+func windowTitle(imageName string) string {
+	title := "PicaGo v" + Version
+	if imageName == "" {
+		return title
+	}
+	return title + " - " + imageName
+}
+
 type Viewer struct {
 	imageA *imagedata.LoadedImage
 	imageB *imagedata.LoadedImage
@@ -42,6 +50,8 @@ type Viewer struct {
 
 	draggingImage           bool
 	draggingSlider          bool
+	sliderDragMinPosition   float64
+	sliderDragMaxPosition   float64
 	leftMouseDown           bool
 	ignoreMouseUntilRelease bool
 	lastMouseX              int
@@ -50,6 +60,8 @@ type Viewer struct {
 	windowWidth           int
 	windowHeight          int
 	slider                compare.Slider
+	sliderInitialized     bool
+	sliderOpacity         float64
 	showHelp              bool
 	reverseCompare        bool
 	syncSliderWithImage   bool
@@ -99,7 +111,7 @@ func Run(args []string) error {
 	}
 
 	ebiten.SetWindowResizable(true)
-	ebiten.SetWindowTitle("PicaGo")
+	ebiten.SetWindowTitle(windowTitle(""))
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowIcon(assets.WindowIcons())
 
@@ -112,7 +124,7 @@ func Run(args []string) error {
 		game.imageA = loaded
 		game.windowWidth = 1280
 		game.windowHeight = 720
-		ebiten.SetWindowTitle(loaded.FileName)
+		ebiten.SetWindowTitle(windowTitle(loaded.FileName))
 		ebiten.SetWindowSize(1280, 720)
 		game.pendingResetFit = true
 		game.pendingInitialBorderless = true
@@ -161,7 +173,7 @@ func (v *Viewer) Update() error {
 				v.draggingSlider = false
 				v.leftMouseDown = false
 				v.restoreClickPending = false
-				ebiten.SetWindowTitle(loaded.FileName)
+				ebiten.SetWindowTitle(windowTitle(loaded.FileName))
 				return fs.SkipAll
 			}
 			return nil
@@ -206,6 +218,7 @@ func (v *Viewer) Update() error {
 	leftMousePressed := ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
 	rightMousePressed := ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight)
 	mouseX, mouseY := ebiten.CursorPosition()
+	mouseOutsideWindow := mouseX < 0 || mouseY < 0 || mouseX >= v.windowWidth || mouseY >= v.windowHeight
 	if v.ignoreMouseUntilRelease {
 		if leftMousePressed || rightMousePressed {
 			return nil
@@ -233,7 +246,7 @@ func (v *Viewer) Update() error {
 			return nil
 		}
 
-		if v.borderlessMaximized && !pointInRect(mouseX, mouseY, imageRect) {
+		if v.borderlessMaximized && !pointInRect(mouseX, mouseY, imageRect) && !v.canStartSliderDragFromOutside(mouseX, mouseY, imageRect) {
 			v.restoreClickPending = true
 			v.restoreClickStartX = mouseX
 			v.restoreClickStartY = mouseY
@@ -256,6 +269,8 @@ func (v *Viewer) Update() error {
 				v.leftMouseDown = true
 				v.draggingImage = false
 				v.draggingSlider = false
+				v.sliderDragMinPosition = 0
+				v.sliderDragMaxPosition = 0
 				return nil
 			}
 			v.lastImageClickAt = now
@@ -272,6 +287,8 @@ func (v *Viewer) Update() error {
 		} else {
 			v.draggingImage = true
 			v.draggingSlider = false
+			v.sliderDragMinPosition = 0
+			v.sliderDragMaxPosition = 0
 		}
 	}
 	if rightMousePressed {
@@ -281,7 +298,7 @@ func (v *Viewer) Update() error {
 		}
 	}
 
-	if leftMousePressed {
+	if leftMousePressed || (v.draggingSlider && mouseOutsideWindow) {
 		if v.restoreClickPending {
 			if absInt(mouseX-v.restoreClickStartX) > 4 || absInt(mouseY-v.restoreClickStartY) > 4 {
 				v.restoreClickPending = false
@@ -317,6 +334,8 @@ func (v *Viewer) Update() error {
 		v.leftMouseDown = false
 		v.draggingImage = false
 		v.draggingSlider = false
+		v.sliderDragMinPosition = 0
+		v.sliderDragMaxPosition = 0
 	}
 
 	if dy := input.WheelDelta(); dy != 0 {
@@ -341,6 +360,8 @@ func (v *Viewer) Update() error {
 		syncRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
 		v.applySliderSync(syncRect)
 	}
+
+	v.updateSliderVisibility(mouseX, mouseY, imageRect, imageReady)
 
 	if ebiten.IsKeyPressed(ebiten.KeyC) && v.imageB != nil {
 		v.mode = displayModeCompare
@@ -382,8 +403,6 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	case displayModeCompare:
 		v.restoreSliderAfterResize()
 		v.ensureSliderPosition()
-		mouseX, mouseY := ebiten.CursorPosition()
-		imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
 		render.DrawCompare(
 			screen,
 			v.imageA,
@@ -394,7 +413,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 			v.slider.Position,
 			int(v.slider.Orientation),
 			v.reverseCompare,
-			v.shouldShowSlider(mouseX, mouseY, imageRect),
+			v.sliderOpacity,
 		)
 	}
 	if v.borderlessMaximized {
@@ -531,6 +550,8 @@ func (v *Viewer) restoreWindow() {
 	v.ignoreMouseUntilRelease = true
 	v.draggingImage = false
 	v.draggingSlider = false
+	v.sliderDragMinPosition = 0
+	v.sliderDragMaxPosition = 0
 }
 
 func (v *Viewer) enterBorderlessMaximized() {
@@ -555,6 +576,8 @@ func (v *Viewer) enterBorderlessMaximized() {
 	v.ignoreMouseUntilRelease = true
 	v.draggingImage = false
 	v.draggingSlider = false
+	v.sliderDragMinPosition = 0
+	v.sliderDragMaxPosition = 0
 }
 
 func (v *Viewer) captureWindowedState() {
@@ -580,16 +603,18 @@ func (v *Viewer) ensureSliderPosition() {
 
 	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
 	if v.slider.Orientation == compare.OrientationHorizontal {
-		if v.slider.Position == 0 {
+		if !v.sliderInitialized {
 			v.slider.Position = float64(imageRect.Min.Y+imageRect.Max.Y) / 2
+			v.sliderInitialized = true
 		}
 		v.slider.Position = clampSliderPosition(v.slider.Position, float64(imageRect.Min.Y), float64(imageRect.Max.Y-1))
 		v.captureSliderSyncRatio(imageRect)
 		return
 	}
 
-	if v.slider.Position == 0 {
+	if !v.sliderInitialized {
 		v.slider.Position = float64(imageRect.Min.X+imageRect.Max.X) / 2
+		v.sliderInitialized = true
 	}
 	v.slider.Position = clampSliderPosition(v.slider.Position, float64(imageRect.Min.X), float64(imageRect.Max.X-1))
 	v.captureSliderSyncRatio(imageRect)
@@ -601,6 +626,7 @@ func (v *Viewer) setSliderOrientation(orientation compare.Orientation) {
 	}
 	v.slider.Orientation = orientation
 	v.slider.Position = 0
+	v.sliderInitialized = false
 	v.ensureSliderPosition()
 }
 
@@ -669,10 +695,12 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 	v.stopViewAnimation(false)
 	v.draggingImage = false
 	v.draggingSlider = false
+	v.sliderDragMinPosition = 0
+	v.sliderDragMaxPosition = 0
 	v.leftMouseDown = false
 	v.restoreClickPending = false
 	v.pendingResetFit = true
-	ebiten.SetWindowTitle(loaded.FileName)
+	ebiten.SetWindowTitle(windowTitle(loaded.FileName))
 	return nil
 }
 
@@ -745,6 +773,8 @@ func (v *Viewer) setDragMode(mouseX, mouseY int, imageRect stdimage.Rectangle) {
 		if math.Abs(float64(mouseY)-effectiveSliderPos) <= 15 {
 			v.draggingSlider = true
 			v.draggingImage = false
+			v.sliderDragMinPosition = float64(imageRect.Min.Y)
+			v.sliderDragMaxPosition = float64(imageRect.Max.Y - 1)
 			return
 		}
 	} else {
@@ -752,6 +782,8 @@ func (v *Viewer) setDragMode(mouseX, mouseY int, imageRect stdimage.Rectangle) {
 		if math.Abs(float64(mouseX)-effectiveSliderPos) <= 15 {
 			v.draggingSlider = true
 			v.draggingImage = false
+			v.sliderDragMinPosition = float64(imageRect.Min.X)
+			v.sliderDragMaxPosition = float64(imageRect.Max.X - 1)
 			return
 		}
 	}
@@ -761,15 +793,30 @@ func (v *Viewer) setDragMode(mouseX, mouseY int, imageRect stdimage.Rectangle) {
 }
 
 func (v *Viewer) updateSliderPosition(mouseX, mouseY int) {
-	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+	minPosition, maxPosition := v.sliderDragBounds()
 	if v.slider.Orientation == compare.OrientationHorizontal {
-		v.slider.Position = clampSliderPosition(float64(mouseY), float64(imageRect.Min.Y), float64(imageRect.Max.Y-1))
+		v.slider.Position = clampSliderPosition(float64(mouseY), minPosition, maxPosition)
+		imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
 		v.captureSliderSyncRatio(imageRect)
 		return
 	}
 
-	v.slider.Position = clampSliderPosition(float64(mouseX), float64(imageRect.Min.X), float64(imageRect.Max.X-1))
+	v.slider.Position = clampSliderPosition(float64(mouseX), minPosition, maxPosition)
+	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
 	v.captureSliderSyncRatio(imageRect)
+}
+
+func (v *Viewer) sliderDragBounds() (float64, float64) {
+	if v.sliderDragMaxPosition >= v.sliderDragMinPosition {
+		return v.sliderDragMinPosition, v.sliderDragMaxPosition
+	}
+
+	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+	if v.slider.Orientation == compare.OrientationHorizontal {
+		return float64(imageRect.Min.Y), float64(imageRect.Max.Y - 1)
+	}
+
+	return float64(imageRect.Min.X), float64(imageRect.Max.X - 1)
 }
 
 func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
@@ -923,6 +970,52 @@ func (v *Viewer) shouldShowSlider(mouseX, mouseY int, imageRect stdimage.Rectang
 
 	effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.X), float64(imageRect.Max.X-1))
 	return effectiveSliderPos <= float64(imageRect.Min.X) || effectiveSliderPos >= float64(imageRect.Max.X-1)
+}
+
+func (v *Viewer) canStartSliderDragFromOutside(mouseX, mouseY int, imageRect stdimage.Rectangle) bool {
+	if imageRect.Empty() || !v.sliderAtImageEdge(imageRect) || !v.sliderNearCursor(mouseX, mouseY, imageRect) {
+		return false
+	}
+
+	if v.slider.Orientation == compare.OrientationHorizontal {
+		return mouseX >= imageRect.Min.X && mouseX < imageRect.Max.X
+	}
+
+	return mouseY >= imageRect.Min.Y && mouseY < imageRect.Max.Y
+}
+
+func (v *Viewer) sliderAtImageEdge(imageRect stdimage.Rectangle) bool {
+	if imageRect.Empty() {
+		return false
+	}
+
+	if v.slider.Orientation == compare.OrientationHorizontal {
+		effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.Y), float64(imageRect.Max.Y-1))
+		return effectiveSliderPos <= float64(imageRect.Min.Y) || effectiveSliderPos >= float64(imageRect.Max.Y-1)
+	}
+
+	effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.X), float64(imageRect.Max.X-1))
+	return effectiveSliderPos <= float64(imageRect.Min.X) || effectiveSliderPos >= float64(imageRect.Max.X-1)
+}
+
+func (v *Viewer) updateSliderVisibility(mouseX, mouseY int, imageRect stdimage.Rectangle, imageReady bool) {
+	targetOpacity := 0.0
+	if v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && v.shouldShowSlider(mouseX, mouseY, imageRect) {
+		targetOpacity = 1
+	}
+
+	if targetOpacity > v.sliderOpacity {
+		v.sliderOpacity += (targetOpacity - v.sliderOpacity) * 0.35
+		if targetOpacity-v.sliderOpacity < 0.01 {
+			v.sliderOpacity = targetOpacity
+		}
+		return
+	}
+
+	v.sliderOpacity += (targetOpacity - v.sliderOpacity) * 0.18
+	if v.sliderOpacity < 0.01 {
+		v.sliderOpacity = 0
+	}
 }
 
 func (v *Viewer) captureSliderSyncRatio(imageRect stdimage.Rectangle) {
