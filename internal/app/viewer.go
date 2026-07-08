@@ -13,6 +13,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	"viewergo/internal/compare"
 	imagedata "viewergo/internal/image"
@@ -39,11 +40,12 @@ type Viewer struct {
 	view       render.View
 	targetView render.View
 
-	draggingImage  bool
-	draggingSlider bool
-	leftMouseDown  bool
-	lastMouseX     int
-	lastMouseY     int
+	draggingImage           bool
+	draggingSlider          bool
+	leftMouseDown           bool
+	ignoreMouseUntilRelease bool
+	lastMouseX              int
+	lastMouseY              int
 
 	windowWidth         int
 	windowHeight        int
@@ -55,6 +57,10 @@ type Viewer struct {
 
 	borderlessMaximized      bool
 	pendingInitialBorderless bool
+	pendingEnterFullscreen   bool
+	enterFromNativeMaximize  bool
+	fullscreenOriginX        int
+	fullscreenOriginY        int
 	pendingResetFit          bool
 	windowedPosX             int
 	windowedPosY             int
@@ -110,12 +116,17 @@ func Run(args []string) error {
 
 func (v *Viewer) Update() error {
 	if v.pendingInitialBorderless {
-		v.captureWindowedState()
-		v.enterBorderlessMaximized()
+		v.enterFromNativeMaximize = false
+		v.pendingEnterFullscreen = true
 		v.pendingInitialBorderless = false
 	}
-	if !v.borderlessMaximized && ebiten.IsWindowMaximized() {
+	if v.pendingEnterFullscreen && !v.borderlessMaximized {
 		v.enterBorderlessMaximized()
+		v.pendingEnterFullscreen = false
+	}
+	if !v.borderlessMaximized && ebiten.IsWindowMaximized() {
+		v.enterFromNativeMaximize = true
+		v.pendingEnterFullscreen = true
 	}
 
 	if dropped := ebiten.DroppedFiles(); dropped != nil {
@@ -175,7 +186,14 @@ func (v *Viewer) Update() error {
 	v.animateView()
 
 	leftMousePressed := ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
+	rightMousePressed := ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight)
 	mouseX, mouseY := ebiten.CursorPosition()
+	if v.ignoreMouseUntilRelease {
+		if leftMousePressed || rightMousePressed {
+			return nil
+		}
+		v.ignoreMouseUntilRelease = false
+	}
 	imageReady := !v.pendingResetFit && v.view.Zoom > 0
 	var imageRect stdimage.Rectangle
 	if imageReady {
@@ -183,6 +201,11 @@ func (v *Viewer) Update() error {
 	}
 
 	if leftMousePressed && !v.leftMouseDown {
+		if v.borderlessMaximized && pointInTopLeftCorner(mouseX, mouseY, 10) {
+			_ = v.loadAdjacentImage(-1)
+			v.leftMouseDown = true
+			return nil
+		}
 		if v.borderlessMaximized && pointInTopRightCorner(mouseX, mouseY, v.windowWidth, 10) {
 			os.Exit(0)
 		}
@@ -206,7 +229,11 @@ func (v *Viewer) Update() error {
 				now.Sub(v.lastImageClickAt) <= 350*time.Millisecond &&
 				absInt(mouseX-v.lastImageClickX) <= 4 &&
 				absInt(mouseY-v.lastImageClickY) <= 4 {
-				v.toggleBorderlessMaximized()
+				if v.borderlessMaximized {
+					v.restoreWindow()
+				} else {
+					v.pendingEnterFullscreen = true
+				}
 				v.lastImageClickAt = time.Time{}
 				v.leftMouseDown = true
 				v.draggingImage = false
@@ -227,6 +254,12 @@ func (v *Viewer) Update() error {
 		} else {
 			v.draggingImage = true
 			v.draggingSlider = false
+		}
+	}
+	if rightMousePressed {
+		if v.borderlessMaximized && pointInTopLeftCorner(mouseX, mouseY, 10) {
+			_ = v.loadAdjacentImage(1)
+			return nil
 		}
 	}
 
@@ -269,7 +302,15 @@ func (v *Viewer) Update() error {
 	}
 
 	if dy := input.WheelDelta(); dy != 0 {
-		v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.3, dy))
+		if v.borderlessMaximized && pointInTopLeftCorner(mouseX, mouseY, 10) {
+			if dy > 0 {
+				_ = v.loadAdjacentImage(-1)
+			} else {
+				_ = v.loadAdjacentImage(1)
+			}
+		} else {
+			v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.3, dy))
+		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
 		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1.3)
@@ -322,9 +363,49 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 		v.ensureSliderPosition()
 		render.DrawCompare(screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, v.view, v.slider.Position, int(v.slider.Orientation), v.reverseCompare)
 	}
+	if v.borderlessMaximized {
+		mouseX, mouseY := ebiten.CursorPosition()
+		drawCornerHints(
+			screen,
+			v.windowWidth,
+			pointInTopLeftCorner(mouseX, mouseY, 10),
+			pointInTopRightCorner(mouseX, mouseY, v.windowWidth, 10),
+		)
+	}
 
 	if v.showHelp {
 		ebitenutil.DebugPrintAt(screen, v.helpText(), 10, 10)
+	}
+}
+
+func drawCornerHints(screen *ebiten.Image, windowWidth int, showTopLeft, showTopRight bool) {
+	const size = float32(40)
+	fill := color.NRGBA{48, 48, 48, 180}
+	options := &vector.DrawPathOptions{AntiAlias: true}
+
+	if showTopLeft {
+		topLeft := &vector.Path{}
+		topLeft.MoveTo(0, 0)
+		topLeft.LineTo(size, 0)
+		topLeft.Arc(0, 0, size, 0, math.Pi/2, vector.Clockwise)
+		topLeft.Close()
+		options.ColorScale.Reset()
+		options.ColorScale.ScaleWithColor(fill)
+		vector.FillPath(screen, topLeft, &vector.FillOptions{}, options)
+		ebitenutil.DebugPrintAt(screen, "<>", 8, 8)
+	}
+
+	if showTopRight {
+		topRight := &vector.Path{}
+		right := float32(windowWidth)
+		topRight.MoveTo(right, 0)
+		topRight.LineTo(right, size)
+		topRight.Arc(right, 0, size, math.Pi/2, math.Pi, vector.Clockwise)
+		topRight.Close()
+		options.ColorScale.Reset()
+		options.ColorScale.ScaleWithColor(fill)
+		vector.FillPath(screen, topRight, &vector.FillOptions{}, options)
+		ebitenutil.DebugPrintAt(screen, "X", windowWidth-16, 8)
 	}
 }
 
@@ -375,6 +456,8 @@ func (v *Viewer) restoreWindow() {
 		if imageRect.Dx() > 0 && imageRect.Dy() > 0 {
 			targetWidth = imageRect.Dx()
 			targetHeight = imageRect.Dy()
+			targetX = v.fullscreenOriginX + imageRect.Min.X
+			targetY = v.fullscreenOriginY + imageRect.Min.Y
 		}
 	}
 
@@ -394,11 +477,22 @@ func (v *Viewer) restoreWindow() {
 		ebiten.SetWindowSize(targetWidth, targetHeight)
 	}
 	if v.hasWindowedState {
+		if monitor := ebiten.Monitor(); monitor != nil {
+			monitorWidth, monitorHeight := monitor.Size()
+			if monitorWidth > 0 {
+				targetX = clampInt(targetX, 0, maxInt(0, monitorWidth-targetWidth))
+			}
+			if monitorHeight > 0 {
+				targetY = clampInt(targetY, 0, maxInt(0, monitorHeight-targetHeight))
+			}
+		}
 		ebiten.SetWindowPosition(targetX, targetY)
 	}
 
 	v.borderlessMaximized = false
+	v.enterFromNativeMaximize = false
 	v.leftMouseDown = false
+	v.ignoreMouseUntilRelease = true
 	v.draggingImage = false
 	v.draggingSlider = false
 }
@@ -409,12 +503,22 @@ func (v *Viewer) enterBorderlessMaximized() {
 	}
 
 	v.captureWindowedState()
+	v.view.OffsetX = 0
+	v.view.OffsetY = 0
+	v.targetView.OffsetX = 0
+	v.targetView.OffsetY = 0
 
 	ebiten.SetWindowDecorated(true)
 	ebiten.SetFullscreen(true)
+	if v.enterFromNativeMaximize {
+		v.fullscreenOriginX, v.fullscreenOriginY = ebiten.WindowPosition()
+	} else {
+		v.fullscreenOriginX, v.fullscreenOriginY = 0, 0
+	}
 
 	v.borderlessMaximized = true
 	v.leftMouseDown = false
+	v.ignoreMouseUntilRelease = true
 	v.draggingImage = false
 	v.draggingSlider = false
 }
@@ -486,7 +590,8 @@ func (v *Viewer) toggleBorderlessMaximized() {
 		v.restoreWindow()
 		return
 	}
-	v.enterBorderlessMaximized()
+	v.enterFromNativeMaximize = false
+	v.pendingEnterFullscreen = true
 }
 
 func (v *Viewer) loadAdjacentImage(step int) error {
@@ -548,11 +653,38 @@ func pointInTopRightCorner(x, y, width, tolerance int) bool {
 	return x >= width-tolerance && y >= 0 && y < tolerance
 }
 
+func pointInTopLeftCorner(x, y, tolerance int) bool {
+	if tolerance <= 0 {
+		return false
+	}
+	return x >= 0 && x < tolerance && y >= 0 && y < tolerance
+}
+
 func absInt(value int) int {
 	if value < 0 {
 		return -value
 	}
 	return value
+}
+
+func clampInt(value, minValue, maxValue int) int {
+	if maxValue < minValue {
+		maxValue = minValue
+	}
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func lerpFloat(a, b, t float64) float64 {
@@ -792,7 +924,7 @@ func (v *Viewer) helpText() string {
 		fileA = v.imageA.FileName
 	}
 
-	fileB := "B"
+	fileB := "aucune"
 	if v.imageB != nil && v.imageB.FileName != "" {
 		fileB = v.imageB.FileName
 	}
@@ -802,5 +934,5 @@ func (v *Viewer) helpText() string {
 		syncMode = "on"
 	}
 
-	return "PicaGo " + Version + "\nF1 aide\nH horizontal\nV vertical\nreappui: inverse\nM mirror\nL slide sync: " + syncMode + "\nR fit\nC compare\n1 " + fileA + "\n2 " + fileB + "\nS slide\nclick fond: retour"
+	return "PicaGo " + Version + "\nF1 aide\nH : split horizontal\nV : split vertical\nM : miroir\nL : slide sync " + syncMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }
