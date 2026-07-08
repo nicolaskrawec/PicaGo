@@ -204,28 +204,77 @@ func drawShadow(screen *ebiten.Image, rect stdimage.Rectangle, alpha float64) {
 		return
 	}
 
-	shadowLayers := []struct {
-		padding int
-		alpha   uint8
-	}{
-		{padding: 14, alpha: 8},
-		{padding: 10, alpha: 12},
-		{padding: 6, alpha: 18},
-		{padding: 3, alpha: 26},
+	rectWidth := float64(rect.Dx())
+	rectHeight := float64(rect.Dy())
+	if rectWidth <= 0 || rectHeight <= 0 {
+		return
 	}
 
-	for _, layer := range shadowLayers {
-		layerRect := rect.Inset(-layer.padding)
-		vector.FillRect(
-			screen,
-			float32(layerRect.Min.X),
-			float32(layerRect.Min.Y),
-			float32(layerRect.Max.X-layerRect.Min.X),
-			float32(layerRect.Max.Y-layerRect.Min.Y),
-			color.RGBA{0, 0, 0, uint8(float64(layer.alpha) * shadowAlpha)},
-			true,
-		)
+	visibleSize := math.Min(rectWidth, rectHeight)
+	spread := clampFloat32(float32(visibleSize*0.3), 8, 500)
+	edgePadding := clampFloat32(spread*0.015625, 1, 2)
+	const layers = 64
+	const maxOpacity = 0.3
+
+	prevOpacity := 0.0
+	for i := 0; i < layers; i++ {
+		t := float64(i) / float64(layers-1)
+		padding := lerpFloat32(spread, edgePadding, float32(t))
+		targetOpacity := t * maxOpacity
+		layerAlpha := alphaStep(prevOpacity, targetOpacity) * shadowAlpha
+		prevOpacity = targetOpacity
+		drawRoundedShadowLayer(screen, rect, padding, 0, spread*0.9, layerAlpha)
 	}
+}
+
+func drawRoundedShadowLayer(screen *ebiten.Image, rect stdimage.Rectangle, padding, offsetY, radius float32, alpha float64) {
+	if alpha <= 0 {
+		return
+	}
+
+	x := float32(rect.Min.X) - padding
+	y := float32(rect.Min.Y) - padding + offsetY
+	w := float32(rect.Dx()) + padding*2
+	h := float32(rect.Dy()) + padding*2
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	path := roundedRectPath(x, y, w, h, radius)
+	options := &vector.DrawPathOptions{
+		AntiAlias: true,
+	}
+	options.ColorScale.Scale(0, 0, 0, float32(clampAlpha(alpha)))
+	vector.FillPath(screen, path, &vector.FillOptions{}, options)
+}
+
+func roundedRectPath(x, y, width, height, radius float32) *vector.Path {
+	path := &vector.Path{}
+	if width <= 0 || height <= 0 {
+		return path
+	}
+
+	r := minFloat32(radius, minFloat32(width/2, height/2))
+	if r <= 0 {
+		path.MoveTo(x, y)
+		path.LineTo(x+width, y)
+		path.LineTo(x+width, y+height)
+		path.LineTo(x, y+height)
+		path.Close()
+		return path
+	}
+
+	path.MoveTo(x+r, y)
+	path.LineTo(x+width-r, y)
+	path.ArcTo(x+width, y, x+width, y+r, r)
+	path.LineTo(x+width, y+height-r)
+	path.ArcTo(x+width, y+height, x+width-r, y+height, r)
+	path.LineTo(x+r, y+height)
+	path.ArcTo(x, y+height, x, y+height-r, r)
+	path.LineTo(x, y+r)
+	path.ArcTo(x, y, x+r, y, r)
+	path.Close()
+	return path
 }
 
 func minInt(a, b int) int {
@@ -240,6 +289,37 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func minFloat32(a, b float32) float32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func clampFloat32(value, minValue, maxValue float32) float32 {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func lerpFloat32(a, b, t float32) float32 {
+	return a + (b-a)*t
+}
+
+func alphaStep(previous, target float64) float64 {
+	if target <= previous {
+		return 0
+	}
+	if previous >= 1 {
+		return 0
+	}
+	return (target - previous) / (1 - previous)
 }
 
 func mapRange(value, inMin, inMax, outMin, outMax int, reverse bool) float64 {
