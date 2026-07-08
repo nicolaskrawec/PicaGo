@@ -1,6 +1,9 @@
 package image
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"strings"
+)
 
 var supportedExtensions = map[string]struct{}{
 	".jpg":  {},
@@ -14,6 +17,6 @@ var supportedExtensions = map[string]struct{}{
 }
 
 func IsSupportedFile(path string) bool {
-	_, ok := supportedExtensions[filepath.Ext(path)]
+	_, ok := supportedExtensions[strings.ToLower(filepath.Ext(path))]
 	return ok
 }

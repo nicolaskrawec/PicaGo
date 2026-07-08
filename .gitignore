@@ -12,4 +12,7 @@ coverage.out
 Thumbs.db
 Desktop.ini
 *.log
-test.png
+*.png
+*.jpg
+*.jpeg
+*.gif
