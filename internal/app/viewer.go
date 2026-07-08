@@ -382,7 +382,20 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	case displayModeCompare:
 		v.restoreSliderAfterResize()
 		v.ensureSliderPosition()
-		render.DrawCompare(screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, v.view, v.slider.Position, int(v.slider.Orientation), v.reverseCompare)
+		mouseX, mouseY := ebiten.CursorPosition()
+		imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+		render.DrawCompare(
+			screen,
+			v.imageA,
+			v.imageB,
+			v.windowWidth,
+			v.windowHeight,
+			v.view,
+			v.slider.Position,
+			int(v.slider.Orientation),
+			v.reverseCompare,
+			v.shouldShowSlider(mouseX, mouseY, imageRect),
+		)
 	}
 	if v.borderlessMaximized {
 		mouseX, mouseY := ebiten.CursorPosition()
@@ -893,6 +906,23 @@ func (v *Viewer) sliderNearCursor(mouseX, mouseY int, imageRect stdimage.Rectang
 
 	effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.X), float64(imageRect.Max.X))
 	return math.Abs(float64(mouseX)-effectiveSliderPos) <= 15
+}
+
+func (v *Viewer) shouldShowSlider(mouseX, mouseY int, imageRect stdimage.Rectangle) bool {
+	if imageRect.Empty() {
+		return false
+	}
+	if v.draggingSlider || v.sliderNearCursor(mouseX, mouseY, imageRect) {
+		return true
+	}
+
+	if v.slider.Orientation == compare.OrientationHorizontal {
+		effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.Y), float64(imageRect.Max.Y-1))
+		return effectiveSliderPos <= float64(imageRect.Min.Y) || effectiveSliderPos >= float64(imageRect.Max.Y-1)
+	}
+
+	effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.X), float64(imageRect.Max.X-1))
+	return effectiveSliderPos <= float64(imageRect.Min.X) || effectiveSliderPos >= float64(imageRect.Max.X-1)
 }
 
 func (v *Viewer) captureSliderSyncRatio(imageRect stdimage.Rectangle) {

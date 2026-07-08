@@ -52,7 +52,7 @@ func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth,
 	drawTexture(screen, loaded.GPUTexture, rect, view.FlipHorizontal, view.Alpha)
 }
 
-func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, sliderPosition float64, orientation int, reverse bool) {
+func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, sliderPosition float64, orientation int, reverse bool, showSlider bool) {
 	DrawImage(screen, imageA, windowWidth, windowHeight, view)
 	if imageA == nil || imageB == nil || imageB.GPUTexture == nil {
 		return
@@ -67,14 +67,18 @@ func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, wi
 			return
 		}
 		drawClippedCompareImage(screen, imageB.GPUTexture, rectB, visibleTop, true, reverse, view.FlipHorizontal, view.Alpha)
-		vector.FillRect(screen, float32(rectA.Min.X), float32(visibleTop)-1, float32(rectA.Max.X-rectA.Min.X), 2, color.NRGBA{230, 230, 230, 96}, true)
+		if showSlider {
+			vector.FillRect(screen, float32(rectA.Min.X), float32(visibleTop)-1, float32(rectA.Max.X-rectA.Min.X), 2, color.NRGBA{230, 230, 230, 96}, true)
+		}
 	default:
 		visibleLeft := clampBoundary(int(math.Ceil(sliderPosition)), rectA.Min.X, rectA.Max.X-1)
 		if visibleLeft < rectA.Min.X {
 			return
 		}
 		drawClippedCompareImage(screen, imageB.GPUTexture, rectB, visibleLeft, false, reverse, view.FlipHorizontal, view.Alpha)
-		vector.FillRect(screen, float32(visibleLeft)-1, float32(rectA.Min.Y), 2, float32(rectA.Max.Y-rectA.Min.Y), color.NRGBA{230, 230, 230, 96}, true)
+		if showSlider {
+			vector.FillRect(screen, float32(visibleLeft)-1, float32(rectA.Min.Y), 2, float32(rectA.Max.Y-rectA.Min.Y), color.NRGBA{230, 230, 230, 96}, true)
+		}
 	}
 }
 
