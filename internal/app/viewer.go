@@ -45,28 +45,35 @@ type Viewer struct {
 	lastMouseX     int
 	lastMouseY     int
 
-	windowWidth  int
-	windowHeight int
-	slider         compare.Slider
-	showHelp       bool
-	reverseCompare bool
+	windowWidth         int
+	windowHeight        int
+	slider              compare.Slider
+	showHelp            bool
+	reverseCompare      bool
 	syncSliderWithImage bool
 	sliderSyncRatio     float64
 
-	borderlessMaximized bool
+	borderlessMaximized      bool
 	pendingInitialBorderless bool
-	pendingResetFit     bool
-	windowedPosX        int
-	windowedPosY        int
-	windowedWidth       int
-	windowedHeight      int
-	hasWindowedState    bool
-	restoreClickPending bool
-	restoreClickStartX  int
-	restoreClickStartY  int
-	lastImageClickAt    time.Time
-	lastImageClickX     int
-	lastImageClickY     int
+	pendingResetFit          bool
+	windowedPosX             int
+	windowedPosY             int
+	windowedWidth            int
+	windowedHeight           int
+	hasWindowedState         bool
+	restoreClickPending      bool
+	restoreClickStartX       int
+	restoreClickStartY       int
+	lastImageClickAt         time.Time
+	lastImageClickX          int
+	lastImageClickY          int
+	viewAnimationActive      bool
+	viewAnimationStart       time.Time
+	viewAnimationLength      time.Duration
+	viewAnimationDelayUntil  time.Time
+	viewAnimationFrom        render.View
+	viewAnimationTo          render.View
+	animateInitialFit        bool
 }
 
 func Run(args []string) error {
@@ -80,12 +87,13 @@ func Run(args []string) error {
 	}
 
 	game := &Viewer{
-		imageA:               loaded,
-		mode:                 displayModeSingleA,
-		windowWidth:          1280,
-		windowHeight:         720,
-		slider:               compare.Slider{Orientation: compare.OrientationVertical},
-		syncSliderWithImage:   true,
+		imageA:              loaded,
+		mode:                displayModeSingleA,
+		windowWidth:         1280,
+		windowHeight:        720,
+		slider:              compare.Slider{Orientation: compare.OrientationVertical},
+		syncSliderWithImage: true,
+		animateInitialFit:   true,
 	}
 
 	ebiten.SetWindowResizable(true)
@@ -204,6 +212,7 @@ func (v *Viewer) Update() error {
 		}
 
 		v.leftMouseDown = true
+		v.stopViewAnimation(false)
 		v.lastMouseX = mouseX
 		v.lastMouseY = mouseY
 		if v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady {
@@ -254,6 +263,12 @@ func (v *Viewer) Update() error {
 
 	if dy := input.WheelDelta(); dy != 0 {
 		v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.3, dy))
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
+		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1.3)
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
+		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1/1.3)
 	}
 
 	if v.syncSliderWithImage && v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && !v.draggingSlider {
@@ -320,10 +335,24 @@ func (v *Viewer) resetFit() {
 		return
 	}
 
-	v.view.Zoom = render.FitZoom(v.windowWidth, v.windowHeight, base.Width, base.Height)
-	v.view.OffsetX = 0
-	v.view.OffsetY = 0
-	v.targetView = v.view
+	targetView := render.View{
+		Zoom:           render.FitZoom(v.windowWidth, v.windowHeight, base.Width, base.Height),
+		OffsetX:        0,
+		OffsetY:        0,
+		Alpha:          1,
+		FlipHorizontal: v.view.FlipHorizontal,
+	}
+	if v.animateInitialFit {
+		startView := targetView
+		startView.Zoom = targetView.Zoom * 0.1
+		startView.Alpha = 0
+		v.startViewAnimation(startView, targetView, 500*time.Millisecond, 120*time.Millisecond)
+		v.animateInitialFit = false
+	} else {
+		v.stopViewAnimation(true)
+		v.view = targetView
+		v.targetView = targetView
+	}
 	v.ensureSliderPosition()
 }
 
@@ -488,6 +517,7 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 	v.imageA = loaded
 	v.view = render.View{}
 	v.targetView = v.view
+	v.stopViewAnimation(false)
 	v.draggingImage = false
 	v.draggingSlider = false
 	v.leftMouseDown = false
@@ -506,6 +536,10 @@ func absInt(value int) int {
 		return -value
 	}
 	return value
+}
+
+func lerpFloat(a, b, t float64) float64 {
+	return a + (b-a)*t
 }
 
 func clampSliderPosition(position, minPosition, maxPosition float64) float64 {
@@ -560,6 +594,7 @@ func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
 	if base == nil {
 		return
 	}
+	v.stopViewAnimation(false)
 
 	oldZoom := v.view.Zoom
 	newZoom := math.Max(oldZoom*factor, 0.05)
@@ -578,9 +613,37 @@ func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
 	v.targetView.OffsetX = mouseX - centerX - (worldX-imageCenterX)*newZoom
 	v.targetView.OffsetY = mouseY - centerY - (worldY-imageCenterY)*newZoom
 	v.targetView.Zoom = newZoom
+	v.targetView.Alpha = 1
 }
 
 func (v *Viewer) animateView() {
+	if v.viewAnimationActive {
+		now := time.Now()
+		if now.Before(v.viewAnimationDelayUntil) {
+			v.view = v.viewAnimationFrom
+			v.targetView = v.viewAnimationTo
+			return
+		}
+
+		elapsed := now.Sub(v.viewAnimationStart)
+		if elapsed >= v.viewAnimationLength {
+			v.view = v.viewAnimationTo
+			v.targetView = v.viewAnimationTo
+			v.viewAnimationActive = false
+			return
+		}
+
+		t := float64(elapsed) / float64(v.viewAnimationLength)
+		eased := 1 - math.Pow(1-t, 3)
+		v.view.Zoom = lerpFloat(v.viewAnimationFrom.Zoom, v.viewAnimationTo.Zoom, eased)
+		v.view.OffsetX = lerpFloat(v.viewAnimationFrom.OffsetX, v.viewAnimationTo.OffsetX, eased)
+		v.view.OffsetY = lerpFloat(v.viewAnimationFrom.OffsetY, v.viewAnimationTo.OffsetY, eased)
+		v.view.Alpha = lerpFloat(v.viewAnimationFrom.Alpha, v.viewAnimationTo.Alpha, eased)
+		v.view.FlipHorizontal = v.viewAnimationTo.FlipHorizontal
+		v.targetView = v.viewAnimationTo
+		return
+	}
+
 	const smoothing = 0.2
 
 	if math.Abs(v.view.Zoom-v.targetView.Zoom) < 0.001 {
@@ -600,6 +663,38 @@ func (v *Viewer) animateView() {
 	} else {
 		v.view.OffsetY += (v.targetView.OffsetY - v.view.OffsetY) * smoothing
 	}
+
+	if math.Abs(v.view.Alpha-v.targetView.Alpha) < 0.001 {
+		v.view.Alpha = v.targetView.Alpha
+	} else {
+		v.view.Alpha += (v.targetView.Alpha - v.view.Alpha) * smoothing
+	}
+}
+
+func (v *Viewer) startViewAnimation(from, to render.View, duration, delay time.Duration) {
+	now := time.Now()
+	v.viewAnimationActive = true
+	v.viewAnimationStart = now.Add(delay)
+	v.viewAnimationLength = duration
+	v.viewAnimationDelayUntil = v.viewAnimationStart
+	v.viewAnimationFrom = from
+	v.viewAnimationTo = to
+	v.view = from
+	v.targetView = to
+}
+
+func (v *Viewer) stopViewAnimation(finish bool) {
+	if !v.viewAnimationActive {
+		return
+	}
+	if finish {
+		v.view = v.viewAnimationTo
+		v.targetView = v.viewAnimationTo
+	} else {
+		v.targetView = v.view
+	}
+	v.viewAnimationActive = false
+	v.viewAnimationDelayUntil = time.Time{}
 }
 
 func (v *Viewer) updateCursorShape(mouseX, mouseY int, imageRect stdimage.Rectangle, imageReady bool) {
