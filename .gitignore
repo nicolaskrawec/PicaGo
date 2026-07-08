@@ -5,6 +5,7 @@ dist/
 *.dll
 *.so
 *.dylib
+*.syso
 *.test
 coverage.out
 .idea/

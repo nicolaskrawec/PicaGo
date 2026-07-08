@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	stdimage "image"
 	"image/color"
 	"io/fs"
@@ -15,6 +14,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
+	"viewergo/internal/assets"
 	"viewergo/internal/compare"
 	imagedata "viewergo/internal/image"
 	"viewergo/internal/input"
@@ -47,13 +47,19 @@ type Viewer struct {
 	lastMouseX              int
 	lastMouseY              int
 
-	windowWidth         int
-	windowHeight        int
-	slider              compare.Slider
-	showHelp            bool
-	reverseCompare      bool
-	syncSliderWithImage bool
-	sliderSyncRatio     float64
+	windowWidth           int
+	windowHeight          int
+	slider                compare.Slider
+	showHelp              bool
+	reverseCompare        bool
+	syncSliderWithImage   bool
+	sliderSyncRatio       float64
+	pendingSliderRestore  bool
+	sliderBaseWidth       int
+	sliderBaseHeight      int
+	pendingViewportRebase bool
+	viewportBaseWidth     int
+	viewportBaseHeight    int
 
 	borderlessMaximized      bool
 	pendingInitialBorderless bool
@@ -83,30 +89,34 @@ type Viewer struct {
 }
 
 func Run(args []string) error {
-	if len(args) == 0 {
-		return errors.New("usage: imageviewer <image-path>")
-	}
-
-	loaded, err := imagedata.LoadFile(args[0])
-	if err != nil {
-		return err
-	}
-
 	game := &Viewer{
-		imageA:              loaded,
 		mode:                displayModeSingleA,
-		windowWidth:         1280,
-		windowHeight:        720,
+		windowWidth:         640,
+		windowHeight:        480,
 		slider:              compare.Slider{Orientation: compare.OrientationVertical},
 		syncSliderWithImage: true,
 		animateInitialFit:   true,
 	}
 
 	ebiten.SetWindowResizable(true)
-	ebiten.SetWindowTitle(loaded.FileName)
-	ebiten.SetWindowSize(1280, 720)
-	game.pendingResetFit = true
-	game.pendingInitialBorderless = true
+	ebiten.SetWindowTitle("PicaGo")
+	ebiten.SetWindowSize(640, 480)
+	ebiten.SetWindowIcon(assets.WindowIcons())
+
+	if len(args) > 0 {
+		loaded, err := imagedata.LoadFile(args[0])
+		if err != nil {
+			return err
+		}
+
+		game.imageA = loaded
+		game.windowWidth = 1280
+		game.windowHeight = 720
+		ebiten.SetWindowTitle(loaded.FileName)
+		ebiten.SetWindowSize(1280, 720)
+		game.pendingResetFit = true
+		game.pendingInitialBorderless = true
+	}
 
 	if err := ebiten.RunGame(game); err != nil {
 		return err
@@ -135,15 +145,23 @@ func (v *Viewer) Update() error {
 				return nil
 			}
 			if loaded, err := imagedata.LoadFS(dropped, path); err == nil {
-				firstComparisonImage := v.imageB == nil
-				v.imageB = loaded
-				if firstComparisonImage {
+				switch {
+				case v.imageA == nil:
+					v.imageA = loaded
+					v.mode = displayModeSingleA
+					v.pendingResetFit = true
+					v.animateInitialFit = true
+				case v.imageB == nil:
+					v.imageB = loaded
 					v.mode = displayModeCompare
+				default:
+					v.imageB = loaded
 				}
 				v.draggingImage = false
 				v.draggingSlider = false
 				v.leftMouseDown = false
 				v.restoreClickPending = false
+				ebiten.SetWindowTitle(loaded.FileName)
 				return fs.SkipAll
 			}
 			return nil
@@ -194,7 +212,7 @@ func (v *Viewer) Update() error {
 		}
 		v.ignoreMouseUntilRelease = false
 	}
-	imageReady := !v.pendingResetFit && v.view.Zoom > 0
+	imageReady := v.imageA != nil && !v.pendingResetFit && v.view.Zoom > 0
 	var imageRect stdimage.Rectangle
 	if imageReady {
 		imageRect = render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
@@ -319,7 +337,7 @@ func (v *Viewer) Update() error {
 		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1/1.3)
 	}
 
-	if v.syncSliderWithImage && v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && !v.draggingSlider {
+	if v.syncSliderWithImage && v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && !v.draggingSlider && !v.pendingSliderRestore {
 		syncRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
 		v.applySliderSync(syncRect)
 	}
@@ -344,7 +362,9 @@ func (v *Viewer) Update() error {
 
 func (v *Viewer) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{127, 127, 127, 255})
-	v.windowWidth, v.windowHeight = screen.Bounds().Dx(), screen.Bounds().Dy()
+	newWidth, newHeight := screen.Bounds().Dx(), screen.Bounds().Dy()
+	v.rebaseViewportForResize(newWidth, newHeight)
+	v.windowWidth, v.windowHeight = newWidth, newHeight
 
 	if v.pendingResetFit {
 		if v.borderlessMaximized && v.hasWindowedState && v.windowWidth == v.windowedWidth && v.windowHeight == v.windowedHeight {
@@ -360,6 +380,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	case displayModeSingleB:
 		render.DrawImage(screen, v.imageB, v.windowWidth, v.windowHeight, v.view)
 	case displayModeCompare:
+		v.restoreSliderAfterResize()
 		v.ensureSliderPosition()
 		render.DrawCompare(screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, v.view, v.slider.Position, int(v.slider.Orientation), v.reverseCompare)
 	}
@@ -449,6 +470,8 @@ func (v *Viewer) restoreWindow() {
 		return
 	}
 
+	v.prepareSliderRestore()
+
 	targetX, targetY := v.windowedPosX, v.windowedPosY
 	targetWidth, targetHeight := v.windowedWidth, v.windowedHeight
 	if v.imageA != nil && v.windowWidth > 0 && v.windowHeight > 0 && v.view.Zoom > 0 {
@@ -503,10 +526,8 @@ func (v *Viewer) enterBorderlessMaximized() {
 	}
 
 	v.captureWindowedState()
-	v.view.OffsetX = 0
-	v.view.OffsetY = 0
-	v.targetView.OffsetX = 0
-	v.targetView.OffsetY = 0
+	v.prepareSliderRestore()
+	v.prepareViewportRebase()
 
 	ebiten.SetWindowDecorated(true)
 	ebiten.SetFullscreen(true)
@@ -875,6 +896,10 @@ func (v *Viewer) sliderNearCursor(mouseX, mouseY int, imageRect stdimage.Rectang
 }
 
 func (v *Viewer) captureSliderSyncRatio(imageRect stdimage.Rectangle) {
+	if v.pendingSliderRestore {
+		return
+	}
+
 	if imageRect.Empty() {
 		return
 	}
@@ -916,6 +941,70 @@ func (v *Viewer) applySliderSync(imageRect stdimage.Rectangle) {
 		return
 	}
 	v.slider.Position = float64(imageRect.Min.X) + clampSliderPosition(v.sliderSyncRatio, 0, 1)*span
+}
+
+func (v *Viewer) prepareSliderRestore() {
+	if !v.syncSliderWithImage || v.mode != displayModeCompare || v.imageA == nil || v.imageB == nil || v.windowWidth <= 0 || v.windowHeight <= 0 || v.view.Zoom <= 0 {
+		return
+	}
+
+	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+	if imageRect.Empty() {
+		return
+	}
+
+	v.captureSliderSyncRatio(imageRect)
+	v.sliderBaseWidth = v.windowWidth
+	v.sliderBaseHeight = v.windowHeight
+	v.pendingSliderRestore = true
+}
+
+func (v *Viewer) restoreSliderAfterResize() {
+	if !v.pendingSliderRestore || v.windowWidth <= 0 || v.windowHeight <= 0 || v.imageA == nil || v.view.Zoom <= 0 {
+		return
+	}
+	if v.windowWidth == v.sliderBaseWidth && v.windowHeight == v.sliderBaseHeight {
+		return
+	}
+
+	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+	if imageRect.Empty() {
+		return
+	}
+
+	v.applySliderSync(imageRect)
+	v.pendingSliderRestore = false
+}
+
+func (v *Viewer) prepareViewportRebase() {
+	if v.windowWidth <= 0 || v.windowHeight <= 0 {
+		return
+	}
+
+	v.viewportBaseWidth = v.windowWidth
+	v.viewportBaseHeight = v.windowHeight
+	v.pendingViewportRebase = true
+}
+
+func (v *Viewer) rebaseViewportForResize(newWidth, newHeight int) {
+	if !v.pendingViewportRebase || newWidth <= 0 || newHeight <= 0 || v.viewportBaseWidth <= 0 || v.viewportBaseHeight <= 0 {
+		return
+	}
+
+	dx := float64(v.viewportBaseWidth-newWidth) / 2
+	dy := float64(v.viewportBaseHeight-newHeight) / 2
+	v.view.OffsetX += dx
+	v.view.OffsetY += dy
+	v.targetView.OffsetX += dx
+	v.targetView.OffsetY += dy
+	if v.syncSliderWithImage && v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil {
+		if v.slider.Orientation == compare.OrientationHorizontal {
+			v.slider.Position -= dy
+		} else {
+			v.slider.Position -= dx
+		}
+	}
+	v.pendingViewportRebase = false
 }
 
 func (v *Viewer) helpText() string {
