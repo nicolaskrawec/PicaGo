@@ -29,9 +29,18 @@ const (
 	displayModeCompare
 )
 
+type compareMaskMode int
+
+const (
+	compareMaskSplit compareMaskMode = iota
+	compareMaskCircle
+)
+
 const idleFrameDelay = 500 * time.Millisecond
+const compareBorderIdleDelay = 1200 * time.Millisecond
 const cornerCommandTolerance = 25
 const cornerHintAlpha = 50
+const defaultCircleMaskDiameterRatio = 0.1
 
 var Version = "dev"
 
@@ -66,8 +75,12 @@ type Viewer struct {
 	slider                compare.Slider
 	sliderInitialized     bool
 	sliderOpacity         float64
+	circleBorderOpacity   float64
 	showShadow            bool
 	showHelp              bool
+	compareMask           compareMaskMode
+	circleMaskDiameter    float64
+	lastCompareBorderAt   time.Time
 	reverseCompare        bool
 	syncSliderWithImage   bool
 	sliderSyncRatio       float64
@@ -116,6 +129,8 @@ func Run(args []string) error {
 		windowWidth:         640,
 		windowHeight:        480,
 		slider:              compare.Slider{Orientation: compare.OrientationVertical},
+		circleMaskDiameter:  defaultCircleMaskDiameterRatio,
+		lastCompareBorderAt: time.Now(),
 		lastActivityAt:      time.Now(),
 		showShadow:          true,
 		syncSliderWithImage: true,
@@ -175,6 +190,7 @@ func (v *Viewer) Update() error {
 				case v.imageA == nil:
 					v.imageA = loaded
 					v.mode = displayModeSingleA
+					v.circleMaskDiameter = defaultCircleMaskDiameterRatio
 					v.pendingResetFit = true
 					v.animateInitialFit = true
 				case v.imageB == nil:
@@ -217,6 +233,9 @@ func (v *Viewer) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyV) {
 		v.setCompareOrientation(compare.OrientationVertical)
 	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyC) && v.imageB != nil {
+		v.setCircleCompare()
+	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyM) || inpututil.IsKeyJustPressed(ebiten.KeySemicolon) {
 		v.toggleFlipHorizontal()
 	}
@@ -240,6 +259,9 @@ func (v *Viewer) Update() error {
 		mouseMoved = mouseX != v.idleMouseX || mouseY != v.idleMouseY
 	} else {
 		v.idleMouseTracked = true
+	}
+	if mouseMoved || leftMousePressed || rightMousePressed {
+		v.markCompareBorderActivity(now)
 	}
 	v.idleMouseX = mouseX
 	v.idleMouseY = mouseY
@@ -340,7 +362,7 @@ func (v *Viewer) Update() error {
 			v.view.OffsetY += float64(dy)
 			v.targetView.OffsetX += float64(dx)
 			v.targetView.OffsetY += float64(dy)
-			if v.syncSliderWithImage && v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil {
+			if v.syncSliderWithImage && v.mode == displayModeCompare && v.compareMask == compareMaskSplit && v.imageA != nil && v.imageB != nil {
 				if v.slider.Orientation == compare.OrientationHorizontal {
 					v.slider.Position += float64(dy)
 				} else {
@@ -364,15 +386,19 @@ func (v *Viewer) Update() error {
 		v.sliderDragMaxPosition = 0
 	}
 
-	if dy := input.WheelDelta(); dy != 0 {
+	wheelDelta := input.WheelDelta()
+	if wheelDelta != 0 {
+		v.markCompareBorderActivity(now)
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
-			if dy > 0 {
+			if wheelDelta > 0 {
 				_ = v.loadAdjacentImage(-1)
 			} else {
 				_ = v.loadAdjacentImage(1)
 			}
+		} else if v.mode == displayModeCompare && v.compareMask == compareMaskCircle && v.imageB != nil && imageReady {
+			v.adjustCircleMaskDiameter(wheelDelta)
 		} else {
-			v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.3, dy))
+			v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.3, wheelDelta))
 		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
@@ -382,16 +408,13 @@ func (v *Viewer) Update() error {
 		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1/1.15)
 	}
 
-	if v.syncSliderWithImage && v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && !v.draggingSlider && !v.pendingSliderRestore {
+	if v.syncSliderWithImage && v.mode == displayModeCompare && v.compareMask == compareMaskSplit && v.imageA != nil && v.imageB != nil && imageReady && !v.draggingSlider && !v.pendingSliderRestore {
 		syncRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
 		v.applySliderSync(syncRect)
 	}
 
-	v.updateSliderVisibility(mouseX, mouseY, imageRect, imageReady)
+	v.updateCompareGuideVisibility(now, mouseX, mouseY, imageRect, imageReady)
 
-	if ebiten.IsKeyPressed(ebiten.KeyC) && v.imageB != nil {
-		v.mode = displayModeCompare
-	}
 	if ebiten.IsKeyPressed(ebiten.Key1) {
 		v.mode = displayModeSingleA
 	}
@@ -427,19 +450,37 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	case displayModeCompare:
 		v.restoreSliderAfterResize()
 		v.ensureSliderPosition()
-		render.DrawCompare(
-			screen,
-			v.imageA,
-			v.imageB,
-			v.windowWidth,
-			v.windowHeight,
-			v.view,
-			v.slider.Position,
-			int(v.slider.Orientation),
-			v.reverseCompare,
-			v.sliderOpacity,
-			v.showShadow,
-		)
+		mouseX, mouseY := ebiten.CursorPosition()
+		if v.compareMask == compareMaskCircle {
+			render.DrawCompareCircle(
+				screen,
+				v.imageA,
+				v.imageB,
+				v.windowWidth,
+				v.windowHeight,
+				v.view,
+				mouseX,
+				mouseY,
+				v.circleMaskDiameter,
+				v.reverseCompare,
+				v.circleBorderOpacity,
+				v.showShadow,
+			)
+		} else {
+			render.DrawCompare(
+				screen,
+				v.imageA,
+				v.imageB,
+				v.windowWidth,
+				v.windowHeight,
+				v.view,
+				v.slider.Position,
+				int(v.slider.Orientation),
+				v.reverseCompare,
+				v.sliderOpacity,
+				v.showShadow,
+			)
+		}
 	}
 	mouseX, mouseY := ebiten.CursorPosition()
 	drawCornerHints(
@@ -654,13 +695,49 @@ func (v *Viewer) setSliderOrientation(orientation compare.Orientation) {
 }
 
 func (v *Viewer) setCompareOrientation(orientation compare.Orientation) {
+	wasCircle := v.compareMask == compareMaskCircle
+	v.compareMask = compareMaskSplit
 	if v.slider.Orientation == orientation {
-		v.reverseCompare = !v.reverseCompare
+		if wasCircle {
+			v.reverseCompare = false
+		} else {
+			v.reverseCompare = !v.reverseCompare
+		}
+		if v.mode == displayModeCompare || v.imageB != nil {
+			v.mode = displayModeCompare
+		}
 		return
 	}
 
 	v.setSliderOrientation(orientation)
 	v.reverseCompare = false
+	if v.imageB != nil {
+		v.mode = displayModeCompare
+	}
+}
+
+func (v *Viewer) setCircleCompare() {
+	v.mode = displayModeCompare
+	now := time.Now()
+	v.markCompareBorderActivity(now)
+	if v.compareMask == compareMaskCircle {
+		v.reverseCompare = !v.reverseCompare
+		return
+	}
+
+	v.compareMask = compareMaskCircle
+	v.reverseCompare = false
+	if v.circleMaskDiameter <= 0 {
+		v.circleMaskDiameter = defaultCircleMaskDiameterRatio
+	}
+}
+
+func (v *Viewer) adjustCircleMaskDiameter(wheelDelta float64) {
+	v.circleMaskDiameter = clampFloat64(v.circleMaskDiameter*math.Pow(1.15, wheelDelta), 0.02, 1)
+}
+
+func (v *Viewer) markCompareBorderActivity(now time.Time) {
+	v.lastCompareBorderAt = now
 }
 
 func (v *Viewer) toggleFlipHorizontal() {
@@ -713,6 +790,7 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 	}
 
 	v.imageA = loaded
+	v.circleMaskDiameter = defaultCircleMaskDiameterRatio
 	v.view = render.View{}
 	v.targetView = v.view
 	v.stopViewAnimation(false)
@@ -789,7 +867,26 @@ func clampSliderPosition(position, minPosition, maxPosition float64) float64 {
 	return position
 }
 
+func clampFloat64(value, minValue, maxValue float64) float64 {
+	if maxValue < minValue {
+		maxValue = minValue
+	}
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
 func (v *Viewer) setDragMode(mouseX, mouseY int, imageRect stdimage.Rectangle) {
+	if v.compareMask == compareMaskCircle {
+		v.draggingImage = true
+		v.draggingSlider = false
+		return
+	}
+
 	effectiveSliderPos := v.slider.Position
 	if v.slider.Orientation == compare.OrientationHorizontal {
 		effectiveSliderPos = clampSliderPosition(effectiveSliderPos, float64(imageRect.Min.Y), float64(imageRect.Max.Y))
@@ -945,6 +1042,10 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 		return true
 	}
 
+	if v.compareMask == compareMaskCircle && v.circleBorderOpacity > 0 {
+		return true
+	}
+
 	return ebiten.IsKeyPressed(ebiten.KeyEscape) ||
 		ebiten.IsKeyPressed(ebiten.KeyR) ||
 		ebiten.IsKeyPressed(ebiten.KeyArrowLeft) ||
@@ -1020,7 +1121,7 @@ func (v *Viewer) stopViewAnimation(finish bool) {
 }
 
 func (v *Viewer) updateCursorShape(mouseX, mouseY int, imageRect stdimage.Rectangle, imageReady bool) {
-	if v.mode != displayModeCompare || v.imageA == nil || v.imageB == nil || !imageReady {
+	if v.mode != displayModeCompare || v.compareMask == compareMaskCircle || v.imageA == nil || v.imageB == nil || !imageReady {
 		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
 		return
 	}
@@ -1038,6 +1139,10 @@ func (v *Viewer) updateCursorShape(mouseX, mouseY int, imageRect stdimage.Rectan
 }
 
 func (v *Viewer) sliderNearCursor(mouseX, mouseY int, imageRect stdimage.Rectangle) bool {
+	if v.compareMask == compareMaskCircle {
+		return false
+	}
+
 	if v.slider.Orientation == compare.OrientationHorizontal {
 		effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.Y), float64(imageRect.Max.Y))
 		return math.Abs(float64(mouseY)-effectiveSliderPos) <= 15
@@ -1047,9 +1152,12 @@ func (v *Viewer) sliderNearCursor(mouseX, mouseY int, imageRect stdimage.Rectang
 	return math.Abs(float64(mouseX)-effectiveSliderPos) <= 15
 }
 
-func (v *Viewer) shouldShowSlider(mouseX, mouseY int, imageRect stdimage.Rectangle) bool {
+func (v *Viewer) shouldShowSlider(now time.Time, mouseX, mouseY int, imageRect stdimage.Rectangle) bool {
 	if imageRect.Empty() {
 		return false
+	}
+	if v.compareMask == compareMaskCircle {
+		return v.draggingImage || v.draggingSlider || v.lastCompareBorderAt.IsZero() || now.Sub(v.lastCompareBorderAt) < compareBorderIdleDelay
 	}
 	if v.draggingSlider || v.sliderNearCursor(mouseX, mouseY, imageRect) {
 		return true
@@ -1065,6 +1173,10 @@ func (v *Viewer) shouldShowSlider(mouseX, mouseY int, imageRect stdimage.Rectang
 }
 
 func (v *Viewer) canStartSliderDragFromOutside(mouseX, mouseY int, imageRect stdimage.Rectangle) bool {
+	if v.compareMask == compareMaskCircle {
+		return false
+	}
+
 	if imageRect.Empty() || !v.sliderAtImageEdge(imageRect) || !v.sliderNearCursor(mouseX, mouseY, imageRect) {
 		return false
 	}
@@ -1080,6 +1192,9 @@ func (v *Viewer) sliderAtImageEdge(imageRect stdimage.Rectangle) bool {
 	if imageRect.Empty() {
 		return false
 	}
+	if v.compareMask == compareMaskCircle {
+		return false
+	}
 
 	if v.slider.Orientation == compare.OrientationHorizontal {
 		effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.Y), float64(imageRect.Max.Y-1))
@@ -1090,24 +1205,41 @@ func (v *Viewer) sliderAtImageEdge(imageRect stdimage.Rectangle) bool {
 	return effectiveSliderPos <= float64(imageRect.Min.X) || effectiveSliderPos >= float64(imageRect.Max.X-1)
 }
 
-func (v *Viewer) updateSliderVisibility(mouseX, mouseY int, imageRect stdimage.Rectangle, imageReady bool) {
-	targetOpacity := 0.0
-	if v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && v.shouldShowSlider(mouseX, mouseY, imageRect) {
-		targetOpacity = 1
-	}
-
-	if targetOpacity > v.sliderOpacity {
-		v.sliderOpacity += (targetOpacity - v.sliderOpacity) * 0.35
-		if targetOpacity-v.sliderOpacity < 0.01 {
-			v.sliderOpacity = targetOpacity
+func (v *Viewer) updateCompareGuideVisibility(now time.Time, mouseX, mouseY int, imageRect stdimage.Rectangle, imageReady bool) {
+	if v.compareMask == compareMaskCircle {
+		targetOpacity := 0.0
+		if v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && v.shouldShowSlider(now, mouseX, mouseY, imageRect) {
+			targetOpacity = 1
 		}
+		v.circleBorderOpacity = approachOpacity(v.circleBorderOpacity, targetOpacity)
+		v.sliderOpacity = 0
 		return
 	}
 
-	v.sliderOpacity += (targetOpacity - v.sliderOpacity) * 0.18
-	if v.sliderOpacity < 0.01 {
-		v.sliderOpacity = 0
+	v.circleBorderOpacity = 0
+
+	targetOpacity := 0.0
+	if v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && v.shouldShowSlider(now, mouseX, mouseY, imageRect) {
+		targetOpacity = 1
 	}
+
+	v.sliderOpacity = approachOpacity(v.sliderOpacity, targetOpacity)
+}
+
+func approachOpacity(current, target float64) float64 {
+	if target > current {
+		current += (target - current) * 0.35
+		if target-current < 0.01 {
+			return target
+		}
+		return current
+	}
+
+	current += (target - current) * 0.18
+	if current < 0.01 {
+		return 0
+	}
+	return current
 }
 
 func (v *Viewer) captureSliderSyncRatio(imageRect stdimage.Rectangle) {
@@ -1159,7 +1291,7 @@ func (v *Viewer) applySliderSync(imageRect stdimage.Rectangle) {
 }
 
 func (v *Viewer) prepareSliderRestore() {
-	if !v.syncSliderWithImage || v.mode != displayModeCompare || v.imageA == nil || v.imageB == nil || v.windowWidth <= 0 || v.windowHeight <= 0 || v.view.Zoom <= 0 {
+	if !v.syncSliderWithImage || v.mode != displayModeCompare || v.compareMask == compareMaskCircle || v.imageA == nil || v.imageB == nil || v.windowWidth <= 0 || v.windowHeight <= 0 || v.view.Zoom <= 0 {
 		return
 	}
 
@@ -1212,7 +1344,7 @@ func (v *Viewer) rebaseViewportForResize(newWidth, newHeight int) {
 	v.view.OffsetY += dy
 	v.targetView.OffsetX += dx
 	v.targetView.OffsetY += dy
-	if v.syncSliderWithImage && v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil {
+	if v.syncSliderWithImage && v.mode == displayModeCompare && v.compareMask == compareMaskSplit && v.imageA != nil && v.imageB != nil {
 		if v.slider.Orientation == compare.OrientationHorizontal {
 			v.slider.Position -= dy
 		} else {
@@ -1243,5 +1375,5 @@ func (v *Viewer) helpText() string {
 		shadowMode = "on"
 	}
 
-	return "PicaGo " + Version + "\nF1 aide\nH : split horizontal\nV : split vertical\nM : miroir\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	return "PicaGo " + Version + "\nF1 aide\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }

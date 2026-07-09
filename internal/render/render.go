@@ -95,6 +95,31 @@ func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, wi
 	}
 }
 
+func DrawCompareCircle(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, centerX, centerY int, diameterRatio float64, reverse bool, sliderOpacity float64, showShadow bool) {
+	DrawImage(screen, imageA, windowWidth, windowHeight, view, showShadow)
+	if imageA == nil || imageB == nil || imageA.GPUTexture == nil || imageB.GPUTexture == nil {
+		return
+	}
+
+	rectA := ImageRect(windowWidth, windowHeight, imageA.Width, imageA.Height, view.Zoom, view.OffsetX, view.OffsetY)
+	rectB := compareRect(rectA, imageB.Width, imageB.Height)
+	radius := float64(minInt(rectA.Dx(), rectA.Dy())) * clampFloat64(diameterRatio, 0.02, 1) / 2
+	if radius <= 0 {
+		return
+	}
+
+	if reverse {
+		drawTexture(screen, imageB.GPUTexture, rectB, view.FlipHorizontal, view.Alpha)
+		drawCircularTexture(screen, imageA.GPUTexture, rectA, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.Alpha)
+	} else {
+		drawCircularTexture(screen, imageB.GPUTexture, rectB, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.Alpha)
+	}
+
+	if sliderOpacity > 0 {
+		drawCircleOutline(screen, float32(centerX), float32(centerY), float32(radius), color.NRGBA{230, 230, 230, uint8(math.Round(96 * clampAlpha(sliderOpacity)))})
+	}
+}
+
 func compareRect(baseRect stdimage.Rectangle, imageWidth, imageHeight int) stdimage.Rectangle {
 	scale := math.Min(float64(baseRect.Dx())/float64(imageWidth), float64(baseRect.Dy())/float64(imageHeight))
 	drawWidth := float64(imageWidth) * scale
@@ -130,6 +155,67 @@ func drawClippedCompareImage(screen *ebiten.Image, texture *ebiten.Image, destRe
 	}
 
 	drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal, alpha)
+}
+
+func drawCircularTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, centerX, centerY, radius float64, flipHorizontal bool, alpha float64) {
+	if texture == nil || destRect.Empty() || radius <= 0 {
+		return
+	}
+
+	left := maxInt(destRect.Min.X, int(math.Floor(centerX-radius)))
+	right := minInt(destRect.Max.X, int(math.Ceil(centerX+radius)))
+	if right <= left {
+		return
+	}
+
+	stripCount := int(math.Ceil(radius * 2))
+	if stripCount < 24 {
+		stripCount = 24
+	}
+	if stripCount > 320 {
+		stripCount = 320
+	}
+
+	step := math.Max(1, float64(right-left)/float64(stripCount))
+	for x := float64(left); x < float64(right); x += step {
+		x0 := int(math.Floor(x))
+		x1 := int(math.Ceil(math.Min(x+step, float64(right))))
+		if x1 <= x0 {
+			x1 = x0 + 1
+		}
+
+		midX := (float64(x0+x1) / 2) - centerX
+		if math.Abs(midX) > radius {
+			continue
+		}
+
+		halfHeight := math.Sqrt(radius*radius - midX*midX)
+		visibleRect := stdimage.Rect(
+			x0,
+			maxInt(destRect.Min.Y, int(math.Ceil(centerY-halfHeight))),
+			x1,
+			minInt(destRect.Max.Y, int(math.Floor(centerY+halfHeight))),
+		)
+		if visibleRect.Empty() {
+			continue
+		}
+
+		drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal, alpha)
+	}
+}
+
+func drawCircleOutline(screen *ebiten.Image, centerX, centerY, radius float32, stroke color.Color) {
+	if radius <= 0 {
+		return
+	}
+
+	path := &vector.Path{}
+	path.MoveTo(centerX+radius, centerY)
+	path.Arc(centerX, centerY, radius, 0, math.Pi*2, vector.Clockwise)
+	path.Close()
+	options := &vector.DrawPathOptions{AntiAlias: true}
+	options.ColorScale.ScaleWithColor(stroke)
+	vector.StrokePath(screen, path, &vector.StrokeOptions{Width: 2}, options)
 }
 
 func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal bool, alpha float64) {
@@ -296,6 +382,19 @@ func clampAlpha(alpha float64) float64 {
 		return 1
 	}
 	return alpha
+}
+
+func clampFloat64(value, minValue, maxValue float64) float64 {
+	if maxValue < minValue {
+		maxValue = minValue
+	}
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
 }
 
 func (s *imageFrameShadow) update(w, h, spread, radius int, alpha float32) {
