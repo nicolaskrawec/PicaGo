@@ -36,6 +36,23 @@ const (
 	compareMaskCircle
 )
 
+type asyncImageSlot int
+
+const (
+	asyncImageSlotA asyncImageSlot = iota
+	asyncImageSlotB
+)
+
+type asyncImageResult struct {
+	id          int
+	slot        asyncImageSlot
+	decoded     *imagedata.DecodedImage
+	err         error
+	resetView   bool
+	animateFit  bool
+	activateFit bool
+}
+
 const idleFrameDelay = 500 * time.Millisecond
 const compareBorderIdleDelay = 1200 * time.Millisecond
 const cornerCommandTolerance = 25
@@ -121,6 +138,12 @@ type Viewer struct {
 	viewAnimationFrom        render.View
 	viewAnimationTo          render.View
 	animateInitialFit        bool
+	nextImageLoadID          int
+	pendingImageLoadAID      int
+	pendingImageLoadBID      int
+	imageLoadResults         chan asyncImageResult
+	loadingImageName         string
+	loadError                string
 }
 
 func Run(args []string) error {
@@ -135,6 +158,7 @@ func Run(args []string) error {
 		showShadow:          true,
 		syncSliderWithImage: true,
 		animateInitialFit:   true,
+		imageLoadResults:    make(chan asyncImageResult, 4),
 	}
 
 	ebiten.SetWindowResizable(true)
@@ -143,18 +167,12 @@ func Run(args []string) error {
 	ebiten.SetWindowIcon(assets.WindowIcons())
 
 	if len(args) > 0 {
-		loaded, err := imagedata.LoadFile(args[0])
-		if err != nil {
-			return err
-		}
-
-		game.imageA = loaded
 		game.windowWidth = 1280
 		game.windowHeight = 720
-		ebiten.SetWindowTitle(windowTitle(loaded.FileName))
+		ebiten.SetWindowTitle(windowTitle(filepath.Base(args[0]) + " loading..."))
 		ebiten.SetWindowSize(1280, 720)
-		game.pendingResetFit = true
 		game.pendingInitialBorderless = true
+		game.startAsyncImageFileLoad(args[0], asyncImageSlotA, true, true)
 	}
 
 	if err := ebiten.RunGame(game); err != nil {
@@ -163,8 +181,136 @@ func Run(args []string) error {
 	return nil
 }
 
+func (v *Viewer) startAsyncImageFileLoad(path string, slot asyncImageSlot, resetView, animateFit bool) {
+	v.nextImageLoadID++
+	id := v.nextImageLoadID
+	v.trackPendingImageLoad(slot, id)
+	v.loadingImageName = filepath.Base(path)
+	v.loadError = ""
+	ebiten.SetWindowTitle(windowTitle(v.loadingImageName + " loading..."))
+
+	go func() {
+		decoded, err := imagedata.DecodeFile(path)
+		v.imageLoadResults <- asyncImageResult{
+			id:          id,
+			slot:        slot,
+			decoded:     decoded,
+			err:         err,
+			resetView:   resetView,
+			animateFit:  animateFit,
+			activateFit: true,
+		}
+	}()
+}
+
+func (v *Viewer) startAsyncImageFSLoad(fsys fs.FS, path string, slot asyncImageSlot, resetView, animateFit bool) {
+	v.nextImageLoadID++
+	id := v.nextImageLoadID
+	v.trackPendingImageLoad(slot, id)
+	v.loadingImageName = filepath.Base(path)
+	v.loadError = ""
+	ebiten.SetWindowTitle(windowTitle(v.loadingImageName + " loading..."))
+
+	go func() {
+		decoded, err := imagedata.DecodeFS(fsys, path)
+		v.imageLoadResults <- asyncImageResult{
+			id:          id,
+			slot:        slot,
+			decoded:     decoded,
+			err:         err,
+			resetView:   resetView,
+			animateFit:  animateFit,
+			activateFit: true,
+		}
+	}()
+}
+
+func (v *Viewer) trackPendingImageLoad(slot asyncImageSlot, id int) {
+	switch slot {
+	case asyncImageSlotA:
+		v.pendingImageLoadAID = id
+	case asyncImageSlotB:
+		v.pendingImageLoadBID = id
+	}
+}
+
+func (v *Viewer) collectAsyncImageLoads() {
+	for {
+		select {
+		case result := <-v.imageLoadResults:
+			v.applyAsyncImageLoad(result)
+		default:
+			return
+		}
+	}
+}
+
+func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
+	if !v.isCurrentImageLoad(result.slot, result.id) {
+		return
+	}
+	v.trackPendingImageLoad(result.slot, 0)
+	v.loadingImageName = ""
+
+	if result.err != nil {
+		v.loadError = result.err.Error()
+		ebiten.SetWindowTitle(windowTitle("load failed"))
+		return
+	}
+
+	loaded := imagedata.NewLoadedImage(result.decoded)
+	if loaded == nil {
+		v.loadError = "image load failed"
+		ebiten.SetWindowTitle(windowTitle("load failed"))
+		return
+	}
+
+	v.loadError = ""
+	if result.resetView {
+		v.view = render.View{}
+		v.targetView = v.view
+		v.stopViewAnimation(false)
+	}
+
+	switch result.slot {
+	case asyncImageSlotA:
+		v.imageA = loaded
+		if v.imageB == nil {
+			v.mode = displayModeSingleA
+		}
+		v.circleMaskDiameter = defaultCircleMaskDiameterRatio
+		if result.activateFit {
+			v.pendingResetFit = true
+			v.animateInitialFit = result.animateFit
+		}
+	case asyncImageSlotB:
+		v.imageB = loaded
+		if v.imageA != nil {
+			v.mode = displayModeCompare
+		}
+	}
+
+	v.draggingImage = false
+	v.draggingSlider = false
+	v.leftMouseDown = false
+	v.restoreClickPending = false
+	ebiten.SetWindowTitle(windowTitle(loaded.FileName))
+}
+
+func (v *Viewer) isCurrentImageLoad(slot asyncImageSlot, id int) bool {
+	switch slot {
+	case asyncImageSlotA:
+		return id != 0 && id == v.pendingImageLoadAID
+	case asyncImageSlotB:
+		return id != 0 && id == v.pendingImageLoadBID
+	default:
+		return false
+	}
+}
+
 func (v *Viewer) Update() error {
 	now := time.Now()
+	v.collectAsyncImageLoads()
 
 	if v.pendingInitialBorderless {
 		v.enterFromNativeMaximize = false
@@ -185,25 +331,12 @@ func (v *Viewer) Update() error {
 			if err != nil || d.IsDir() {
 				return nil
 			}
-			if loaded, err := imagedata.LoadFS(dropped, path); err == nil {
-				switch {
-				case v.imageA == nil:
-					v.imageA = loaded
-					v.mode = displayModeSingleA
-					v.circleMaskDiameter = defaultCircleMaskDiameterRatio
-					v.pendingResetFit = true
-					v.animateInitialFit = true
-				case v.imageB == nil:
-					v.imageB = loaded
-					v.mode = displayModeCompare
-				default:
-					v.imageB = loaded
+			if imagedata.IsSupportedFile(path) {
+				if v.imageA == nil {
+					v.startAsyncImageFSLoad(dropped, path, asyncImageSlotA, true, true)
+				} else {
+					v.startAsyncImageFSLoad(dropped, path, asyncImageSlotB, false, false)
 				}
-				v.draggingImage = false
-				v.draggingSlider = false
-				v.leftMouseDown = false
-				v.restoreClickPending = false
-				ebiten.SetWindowTitle(windowTitle(loaded.FileName))
 				return fs.SkipAll
 			}
 			return nil
@@ -492,6 +625,11 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 
 	if v.showHelp {
 		ebitenutil.DebugPrintAt(screen, v.helpText(), 10, 10)
+	}
+	if v.loadingImageName != "" {
+		ebitenutil.DebugPrintAt(screen, "Loading "+v.loadingImageName, 10, v.windowHeight-22)
+	} else if v.loadError != "" {
+		ebitenutil.DebugPrintAt(screen, "Load failed: "+v.loadError, 10, v.windowHeight-22)
 	}
 }
 
@@ -784,24 +922,7 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 		return nil
 	}
 
-	loaded, err := imagedata.LoadFile(filepath.Join(dir, images[nextIndex]))
-	if err != nil {
-		return err
-	}
-
-	v.imageA = loaded
-	v.circleMaskDiameter = defaultCircleMaskDiameterRatio
-	v.view = render.View{}
-	v.targetView = v.view
-	v.stopViewAnimation(false)
-	v.draggingImage = false
-	v.draggingSlider = false
-	v.sliderDragMinPosition = 0
-	v.sliderDragMaxPosition = 0
-	v.leftMouseDown = false
-	v.restoreClickPending = false
-	v.pendingResetFit = true
-	ebiten.SetWindowTitle(windowTitle(loaded.FileName))
+	v.startAsyncImageFileLoad(filepath.Join(dir, images[nextIndex]), asyncImageSlotA, true, false)
 	return nil
 }
 
@@ -1027,6 +1148,10 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 	}
 
 	if v.pendingInitialBorderless || v.pendingEnterFullscreen || v.pendingResetFit || v.pendingSliderRestore || v.pendingViewportRebase {
+		return true
+	}
+
+	if v.pendingImageLoadAID != 0 || v.pendingImageLoadBID != 0 {
 		return true
 	}
 

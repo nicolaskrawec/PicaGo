@@ -8,7 +8,9 @@ param(
         "darwin/amd64",
         "darwin/arm64"
     ),
-    [string]$OutputDir = "dist"
+    [string]$OutputDir = "dist",
+    [ValidateSet("v1", "v2", "v3", "v4")]
+    [string]$Goamd64 = "v1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -128,12 +130,18 @@ foreach ($target in $Targets) {
     $env:GOOS = $goos
     $env:GOARCH = $goarch
     $env:CGO_ENABLED = "0"
+    if ($goarch -eq "amd64") {
+        $env:GOAMD64 = $Goamd64
+    } else {
+        Remove-Item Env:GOAMD64 -ErrorAction SilentlyContinue
+    }
     go build -trimpath -buildvcs=false -ldflags ($ldflags -join " ") -o $outputPath .
 }
 
 Remove-Item Env:GOOS -ErrorAction SilentlyContinue
 Remove-Item Env:GOARCH -ErrorAction SilentlyContinue
 Remove-Item Env:CGO_ENABLED -ErrorAction SilentlyContinue
+Remove-Item Env:GOAMD64 -ErrorAction SilentlyContinue
 
 foreach ($resource in ($generatedResources | Select-Object -Unique)) {
     Remove-Item -LiteralPath $resource -ErrorAction SilentlyContinue

@@ -25,7 +25,6 @@ type imageFrameShadow struct {
 	h      int
 	spread int
 	radius int
-	alpha  float32
 }
 
 var shadowCache imageFrameShadow
@@ -321,7 +320,7 @@ func drawShadow(screen *ebiten.Image, imageWidth, imageHeight, windowWidth, wind
 
 	spread := shadowSpread(baseWidth, baseHeight)
 	radius := spread * 2
-	shadowCache.update(baseWidth, baseHeight, spread, radius, float32(shadowAlpha*0.2))
+	shadowCache.update(baseWidth, baseHeight, spread, radius)
 	if shadowCache.img == nil {
 		return
 	}
@@ -330,6 +329,7 @@ func drawShadow(screen *ebiten.Image, imageWidth, imageHeight, windowWidth, wind
 	scaleY := float64(rect.Dy()) / float64(baseHeight)
 	options := &ebiten.DrawImageOptions{}
 	options.Filter = ebiten.FilterLinear
+	options.ColorScale.ScaleAlpha(float32(shadowAlpha))
 	options.GeoM.Scale(scaleX, scaleY)
 	options.GeoM.Translate(
 		float64(rect.Min.X)-float64(spread)*scaleX,
@@ -397,8 +397,8 @@ func clampFloat64(value, minValue, maxValue float64) float64 {
 	return value
 }
 
-func (s *imageFrameShadow) update(w, h, spread, radius int, alpha float32) {
-	if s.img != nil && s.w == w && s.h == h && s.spread == spread && s.radius == radius && s.alpha == alpha {
+func (s *imageFrameShadow) update(w, h, spread, radius int) {
+	if s.img != nil && s.w == w && s.h == h && s.spread == spread && s.radius == radius {
 		return
 	}
 
@@ -406,8 +406,7 @@ func (s *imageFrameShadow) update(w, h, spread, radius int, alpha float32) {
 	s.h = h
 	s.spread = spread
 	s.radius = radius
-	s.alpha = alpha
-	s.img = buildShadowImage(w, h, spread, radius, alpha)
+	s.img = buildShadowImage(w, h, spread, radius, 0.2)
 }
 
 func buildShadowImage(w, h, spread, radius int, alpha float32) *ebiten.Image {
