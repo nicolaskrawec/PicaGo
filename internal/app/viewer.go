@@ -374,10 +374,10 @@ func (v *Viewer) Update() error {
 		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
-		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1.3)
+		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1.15)
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
-		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1/1.3)
+		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1/1.15)
 	}
 
 	if v.syncSliderWithImage && v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && !v.draggingSlider && !v.pendingSliderRestore {

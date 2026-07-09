@@ -1,7 +1,6 @@
 package render
 
 import (
-	"log"
 	stdimage "image"
 	"image/color"
 	"math"
@@ -253,56 +252,6 @@ func drawShadow(screen *ebiten.Image, imageWidth, imageHeight, windowWidth, wind
 	screen.DrawImage(shadowCache.img, options)
 }
 
-func drawRoundedShadowLayer(screen *ebiten.Image, rect stdimage.Rectangle, padding, offsetY, radius float32, alpha float64) {
-	if alpha <= 0 {
-		return
-	}
-
-	x := float32(rect.Min.X) - padding
-	y := float32(rect.Min.Y) - padding + offsetY
-	w := float32(rect.Dx()) + padding*2
-	h := float32(rect.Dy()) + padding*2
-	if w <= 0 || h <= 0 {
-		return
-	}
-
-	path := roundedRectPath(x, y, w, h, radius)
-	options := &vector.DrawPathOptions{
-		AntiAlias: true,
-	}
-	options.ColorScale.Scale(0, 0, 0, float32(clampAlpha(alpha)))
-	vector.FillPath(screen, path, &vector.FillOptions{}, options)
-}
-
-func roundedRectPath(x, y, width, height, radius float32) *vector.Path {
-	path := &vector.Path{}
-	if width <= 0 || height <= 0 {
-		return path
-	}
-
-	r := minFloat32(radius, minFloat32(width/2, height/2))
-	if r <= 0 {
-		path.MoveTo(x, y)
-		path.LineTo(x+width, y)
-		path.LineTo(x+width, y+height)
-		path.LineTo(x, y+height)
-		path.Close()
-		return path
-	}
-
-	path.MoveTo(x+r, y)
-	path.LineTo(x+width-r, y)
-	path.ArcTo(x+width, y, x+width, y+r, r)
-	path.LineTo(x+width, y+height-r)
-	path.ArcTo(x+width, y+height, x+width-r, y+height, r)
-	path.LineTo(x+r, y+height)
-	path.ArcTo(x, y+height, x, y+height-r, r)
-	path.LineTo(x, y+r)
-	path.ArcTo(x, y, x+r, y, r)
-	path.Close()
-	return path
-}
-
 func minInt(a, b int) int {
 	if a < b {
 		return a
@@ -317,13 +266,6 @@ func maxInt(a, b int) int {
 	return b
 }
 
-func minFloat32(a, b float32) float32 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func clampFloat32(value, minValue, maxValue float32) float32 {
 	if value < minValue {
 		return minValue
@@ -332,20 +274,6 @@ func clampFloat32(value, minValue, maxValue float32) float32 {
 		return maxValue
 	}
 	return value
-}
-
-func lerpFloat32(a, b, t float32) float32 {
-	return a + (b-a)*t
-}
-
-func alphaStep(previous, target float64) float64 {
-	if target <= previous {
-		return 0
-	}
-	if previous >= 1 {
-		return 0
-	}
-	return (target - previous) / (1 - previous)
 }
 
 func mapRange(value, inMin, inMax, outMin, outMax int, reverse bool) float64 {
@@ -387,8 +315,6 @@ func buildShadowImage(w, h, spread, radius int, alpha float32) *ebiten.Image {
 	if w <= 0 || h <= 0 || spread <= 0 || alpha <= 0 {
 		return nil
 	}
-
-	log.Printf("buildShadowImage: w=%d h=%d spread=%d radius=%d alpha=%.3f", w, h, spread, radius, alpha)
 
 	outW := w + spread*2
 	outH := h + spread*2
