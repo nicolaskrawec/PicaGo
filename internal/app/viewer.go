@@ -30,6 +30,8 @@ const (
 )
 
 const idleFrameDelay = 500 * time.Millisecond
+const cornerCommandTolerance = 25
+const cornerHintAlpha = 50
 
 var Version = "dev"
 
@@ -256,12 +258,12 @@ func (v *Viewer) Update() error {
 	}
 
 	if leftMousePressed && !v.leftMouseDown {
-		if v.borderlessMaximized && pointInTopLeftCorner(mouseX, mouseY, 10) {
+		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			_ = v.loadAdjacentImage(-1)
 			v.leftMouseDown = true
 			return nil
 		}
-		if v.borderlessMaximized && pointInTopRightCorner(mouseX, mouseY, v.windowWidth, 10) {
+		if pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance) {
 			os.Exit(0)
 		}
 
@@ -316,7 +318,7 @@ func (v *Viewer) Update() error {
 		}
 	}
 	if rightMousePressed {
-		if v.borderlessMaximized && pointInTopLeftCorner(mouseX, mouseY, 10) {
+		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			_ = v.loadAdjacentImage(1)
 			return nil
 		}
@@ -363,7 +365,7 @@ func (v *Viewer) Update() error {
 	}
 
 	if dy := input.WheelDelta(); dy != 0 {
-		if v.borderlessMaximized && pointInTopLeftCorner(mouseX, mouseY, 10) {
+		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			if dy > 0 {
 				_ = v.loadAdjacentImage(-1)
 			} else {
@@ -439,15 +441,13 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 			v.showShadow,
 		)
 	}
-	if v.borderlessMaximized {
-		mouseX, mouseY := ebiten.CursorPosition()
-		drawCornerHints(
-			screen,
-			v.windowWidth,
-			pointInTopLeftCorner(mouseX, mouseY, 10),
-			pointInTopRightCorner(mouseX, mouseY, v.windowWidth, 10),
-		)
-	}
+	mouseX, mouseY := ebiten.CursorPosition()
+	drawCornerHints(
+		screen,
+		v.windowWidth,
+		pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance),
+		pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance),
+	)
 
 	if v.showHelp {
 		ebitenutil.DebugPrintAt(screen, v.helpText(), 10, 10)
@@ -456,7 +456,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 
 func drawCornerHints(screen *ebiten.Image, windowWidth int, showTopLeft, showTopRight bool) {
 	const size = float32(40)
-	fill := color.NRGBA{48, 48, 48, 180}
+	fill := color.NRGBA{48, 48, 48, cornerHintAlpha}
 	options := &vector.DrawPathOptions{AntiAlias: true}
 
 	if showTopLeft {
