@@ -1,6 +1,7 @@
 package render
 
 import (
+	"log"
 	stdimage "image"
 	"image/color"
 	"math"
@@ -18,6 +19,17 @@ type View struct {
 	Alpha          float64
 	FlipHorizontal bool
 }
+
+type imageFrameShadow struct {
+	img    *ebiten.Image
+	w      int
+	h      int
+	spread int
+	radius int
+	alpha  float32
+}
+
+var shadowCache imageFrameShadow
 
 func FitZoom(windowWidth, windowHeight, imageWidth, imageHeight int) float64 {
 	if windowWidth <= 0 || windowHeight <= 0 || imageWidth <= 0 || imageHeight <= 0 {
@@ -49,7 +61,7 @@ func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth,
 
 	rect := ImageRect(windowWidth, windowHeight, loaded.Width, loaded.Height, view.Zoom, view.OffsetX, view.OffsetY)
 	if showShadow {
-		drawShadow(screen, rect, view.Alpha)
+		drawShadow(screen, loaded.Width, loaded.Height, windowWidth, windowHeight, rect, view.Alpha)
 	}
 	drawTexture(screen, loaded.GPUTexture, rect, view.FlipHorizontal, view.Alpha)
 }
@@ -204,33 +216,41 @@ func clampBoundary(value, min, max int) int {
 	return value
 }
 
-func drawShadow(screen *ebiten.Image, rect stdimage.Rectangle, alpha float64) {
+func drawShadow(screen *ebiten.Image, imageWidth, imageHeight, windowWidth, windowHeight int, rect stdimage.Rectangle, alpha float64) {
 	shadowAlpha := clampAlpha(alpha)
 	if shadowAlpha <= 0 {
 		return
 	}
 
-	rectWidth := float64(rect.Dx())
-	rectHeight := float64(rect.Dy())
-	if rectWidth <= 0 || rectHeight <= 0 {
+	if imageWidth <= 0 || imageHeight <= 0 || windowWidth <= 0 || windowHeight <= 0 || rect.Empty() {
 		return
 	}
 
-	visibleSize := math.Min(rectWidth, rectHeight)
-	spread := clampFloat32(float32(visibleSize*0.08), 8, 500)
-	edgePadding := clampFloat32(spread*0.015625, 1, 2)
-	const layers = 16
-	const maxOpacity = 0.2
-
-	prevOpacity := 0.0
-	for i := 0; i < layers; i++ {
-		t := float64(i) / float64(layers-1)
-		padding := lerpFloat32(spread, edgePadding, float32(t))
-		targetOpacity := t * maxOpacity
-		layerAlpha := alphaStep(prevOpacity, targetOpacity) * shadowAlpha
-		prevOpacity = targetOpacity
-		drawRoundedShadowLayer(screen, rect, padding, 0, spread*2, layerAlpha)
+	fitZoom := FitZoom(windowWidth, windowHeight, imageWidth, imageHeight)
+	baseRect := ImageRect(windowWidth, windowHeight, imageWidth, imageHeight, fitZoom, 0, 0)
+	baseWidth := baseRect.Dx()
+	baseHeight := baseRect.Dy()
+	if baseWidth <= 0 || baseHeight <= 0 {
+		return
 	}
+
+	spread := shadowSpread(baseWidth, baseHeight)
+	radius := spread * 2
+	shadowCache.update(baseWidth, baseHeight, spread, radius, float32(shadowAlpha*0.2))
+	if shadowCache.img == nil {
+		return
+	}
+
+	scaleX := float64(rect.Dx()) / float64(baseWidth)
+	scaleY := float64(rect.Dy()) / float64(baseHeight)
+	options := &ebiten.DrawImageOptions{}
+	options.Filter = ebiten.FilterLinear
+	options.GeoM.Scale(scaleX, scaleY)
+	options.GeoM.Translate(
+		float64(rect.Min.X)-float64(spread)*scaleX,
+		float64(rect.Min.Y)-float64(spread)*scaleY,
+	)
+	screen.DrawImage(shadowCache.img, options)
 }
 
 func drawRoundedShadowLayer(screen *ebiten.Image, rect stdimage.Rectangle, padding, offsetY, radius float32, alpha float64) {
@@ -348,4 +368,96 @@ func clampAlpha(alpha float64) float64 {
 		return 1
 	}
 	return alpha
+}
+
+func (s *imageFrameShadow) update(w, h, spread, radius int, alpha float32) {
+	if s.img != nil && s.w == w && s.h == h && s.spread == spread && s.radius == radius && s.alpha == alpha {
+		return
+	}
+
+	s.w = w
+	s.h = h
+	s.spread = spread
+	s.radius = radius
+	s.alpha = alpha
+	s.img = buildShadowImage(w, h, spread, radius, alpha)
+}
+
+func buildShadowImage(w, h, spread, radius int, alpha float32) *ebiten.Image {
+	if w <= 0 || h <= 0 || spread <= 0 || alpha <= 0 {
+		return nil
+	}
+
+	log.Printf("buildShadowImage: w=%d h=%d spread=%d radius=%d alpha=%.3f", w, h, spread, radius, alpha)
+
+	outW := w + spread*2
+	outH := h + spread*2
+	rgba := stdimage.NewRGBA(stdimage.Rect(0, 0, outW, outH))
+
+	rectX0 := float64(spread)
+	rectY0 := float64(spread)
+	rectX1 := float64(spread + w)
+	rectY1 := float64(spread + h)
+	blur := float64(spread)
+	cornerRadius := float64(radius)
+
+	for py := 0; py < outH; py++ {
+		for px := 0; px < outW; px++ {
+			x := float64(px) + 0.5
+			y := float64(py) + 0.5
+
+			distance := roundedRectSDF(x, y, rectX0, rectY0, rectX1, rectY1, cornerRadius)
+			if distance < 0 {
+				continue
+			}
+
+			t := 1.0 - clamp01(distance/blur)
+			t *= t
+			a := uint8(math.Round(float64(alpha) * t * 255))
+			if a == 0 {
+				continue
+			}
+
+			rgba.SetRGBA(px, py, color.RGBA{A: a})
+		}
+	}
+
+	return ebiten.NewImageFromImage(rgba)
+}
+
+func roundedRectSDF(px, py, x0, y0, x1, y1, r float64) float64 {
+	cx := (x0 + x1) * 0.5
+	cy := (y0 + y1) * 0.5
+	hx := (x1 - x0) * 0.5
+	hy := (y1 - y0) * 0.5
+
+	r = minFloat64(r, math.Min(hx, hy))
+	qx := math.Abs(px-cx) - (hx - r)
+	qy := math.Abs(py-cy) - (hy - r)
+	ax := math.Max(qx, 0)
+	ay := math.Max(qy, 0)
+
+	return math.Hypot(ax, ay) + math.Min(math.Max(qx, qy), 0) - r
+}
+
+func shadowSpread(width, height int) int {
+	visibleSize := math.Min(float64(width), float64(height))
+	return int(math.Round(float64(clampFloat32(float32(visibleSize*0.08), 8, 500))))
+}
+
+func clamp01(value float64) float64 {
+	if value < 0 {
+		return 0
+	}
+	if value > 1 {
+		return 1
+	}
+	return value
+}
+
+func minFloat64(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }
