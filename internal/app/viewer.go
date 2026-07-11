@@ -73,6 +73,7 @@ const idleFrameDelay = 500 * time.Millisecond
 const compareBorderIdleDelay = 600 * time.Millisecond
 const cornerCommandTolerance = 25
 const bottomCommandHeight = 40
+const bottomCommandCornerWidth = 50
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
 const prefetchedImageCacheLimit = 3
@@ -496,20 +497,59 @@ func (v *Viewer) Update() error {
 	}
 
 	if dropped := ebiten.DroppedFiles(); dropped != nil {
+		var droppedImages []string
+		var firstDroppedImage string
 		_ = fs.WalkDir(dropped, ".", func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+			if err != nil {
 				return nil
 			}
+			if path == "." {
+				return nil
+			}
+			if d.IsDir() {
+				// Keep the old folder-drop fallback below, but do not mix files
+				// from a dropped directory with two explicitly dropped files.
+				return fs.SkipDir
+			}
 			if imagedata.IsSupportedFile(path) {
-				if v.imageA == nil {
-					v.startAsyncImageFSLoad(dropped, path, asyncImageSlotA, true, true)
-				} else {
-					v.startAsyncImageFSLoad(dropped, path, asyncImageSlotB, false, false)
+				if firstDroppedImage == "" {
+					firstDroppedImage = path
 				}
-				return fs.SkipAll
+				droppedImages = append(droppedImages, path)
 			}
 			return nil
 		})
+
+		if len(droppedImages) >= 2 {
+			v.startAsyncImageFSLoad(dropped, droppedImages[0], asyncImageSlotA, true, true)
+			v.startAsyncImageFSLoad(dropped, droppedImages[1], asyncImageSlotB, false, false)
+		} else if firstDroppedImage != "" {
+			if v.imageA == nil {
+				v.startAsyncImageFSLoad(dropped, firstDroppedImage, asyncImageSlotA, true, true)
+			} else {
+				v.startAsyncImageFSLoad(dropped, firstDroppedImage, asyncImageSlotB, false, false)
+			}
+		} else {
+			// A dropped directory is handled as before: use its first supported
+			// image, found recursively.
+			_ = fs.WalkDir(dropped, ".", func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return nil
+				}
+				if d.IsDir() {
+					return nil
+				}
+				if imagedata.IsSupportedFile(path) {
+					if v.imageA == nil {
+						v.startAsyncImageFSLoad(dropped, path, asyncImageSlotA, true, true)
+					} else {
+						v.startAsyncImageFSLoad(dropped, path, asyncImageSlotB, false, false)
+					}
+					return fs.SkipAll
+				}
+				return nil
+			})
+		}
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
@@ -1520,7 +1560,10 @@ func pointInBottomBar(x, y, windowWidth, windowHeight int) bool {
 	if windowWidth <= 0 || windowHeight <= 0 {
 		return false
 	}
-	return x >= 0 && x < windowWidth && y >= windowHeight-bottomCommandHeight && y < windowHeight
+	return x >= bottomCommandCornerWidth &&
+		x < windowWidth-bottomCommandCornerWidth &&
+		y >= windowHeight-bottomCommandHeight &&
+		y < windowHeight
 }
 
 func absInt(value int) int {
