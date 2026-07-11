@@ -187,6 +187,7 @@ type Viewer struct {
 	initialPrefetchPending    bool
 	navigationDirectory       string
 	navigationImages          []string
+	imageViewStates           map[string]render.View
 	loadingImageName          string
 	loadError                 string
 }
@@ -208,6 +209,7 @@ func Run(args []string) error {
 		prefetchInFlight:    make(map[string]bool),
 		prefetchSlots:       make(chan struct{}, 4),
 		prefetchedImages:    make(map[string]*imagedata.DecodedImage),
+		imageViewStates:     make(map[string]render.View),
 	}
 
 	ebiten.SetWindowResizable(true)
@@ -378,12 +380,22 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 	v.loadError = ""
 	v.pendingHighRes[slot] = nil
 	v.initialPrefetchPending = false
+	if v.imageA != nil && v.imageA.FilePath != "" {
+		v.imageViewStates[imageViewStateKey(v.imageA.FilePath)] = v.targetView
+	}
+	savedView, hasSavedView := v.imageViewStates[imageViewStateKey(decoded.FilePath)]
 	var oldLoaded *imagedata.LoadedImage
 	var oldDecoded *imagedata.DecodedImage
 	if resetView {
-		v.view = render.View{}
-		v.targetView = v.view
-		v.stopViewAnimation(false)
+		if hasSavedView {
+			v.stopViewAnimation(true)
+			v.view = savedView
+			v.targetView = savedView
+		} else {
+			v.view = render.View{}
+			v.targetView = v.view
+			v.stopViewAnimation(false)
+		}
 	}
 
 	switch slot {
@@ -396,10 +408,14 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 			v.mode = displayModeSingleA
 		}
 		v.circleMaskDiameter = defaultCircleMaskDiameterRatio
-		if activateFit {
+		if activateFit && !hasSavedView {
 			v.pendingResetFit = true
 			v.animateInitialFit = animateFit
 			v.skipNextFitAnimation = !animateFit
+		} else if hasSavedView {
+			v.pendingResetFit = false
+			v.animateInitialFit = false
+			v.skipNextFitAnimation = false
 		}
 	case asyncImageSlotB:
 		oldLoaded = v.imageB
@@ -451,6 +467,7 @@ func (v *Viewer) isCurrentImageLoad(slot asyncImageSlot, id int) bool {
 
 func (v *Viewer) Update() error {
 	now := time.Now()
+	v.rememberCurrentImageView()
 	v.collectAsyncImageLoads()
 	v.promotePendingHighResImages()
 	v.collectPrefetchedImages()
@@ -725,6 +742,22 @@ func (v *Viewer) Update() error {
 	v.updateFramePacing(now, v.shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed))
 
 	return nil
+}
+
+func (v *Viewer) rememberCurrentImageView() {
+	if v.imageA == nil || v.imageA.FilePath == "" || v.imageViewStates == nil {
+		return
+	}
+	// targetView contains the final user-requested transform while an
+	// animation is in progress, which is the state to restore later.
+	v.imageViewStates[imageViewStateKey(v.imageA.FilePath)] = v.targetView
+}
+
+func imageViewStateKey(path string) string {
+	if absolutePath, err := filepath.Abs(path); err == nil {
+		path = absolutePath
+	}
+	return strings.ToLower(filepath.Clean(path))
 }
 
 func (v *Viewer) Draw(screen *ebiten.Image) {
@@ -1096,6 +1129,7 @@ func (v *Viewer) toggleFlipVertical() {
 }
 
 func (v *Viewer) startMirrorAnimation(horizontal bool) {
+	v.rememberCurrentImageView()
 	if v.mirrorAnimationActive && v.mirrorAnimationHorizontal == horizontal {
 		v.mirrorAnimationFrom = v.mirrorAnimationTo
 		v.mirrorAnimationTo = -v.mirrorAnimationTo
@@ -1124,6 +1158,7 @@ func (v *Viewer) startMirrorAnimation(horizontal bool) {
 }
 
 func (v *Viewer) rotateImage(quarterTurns int) {
+	v.rememberCurrentImageView()
 	if v.rotationAnimationActive {
 		v.pendingRotationTurns += quarterTurns
 		return
