@@ -75,6 +75,7 @@ const cornerCommandTolerance = 25
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
 const prefetchedImageCacheLimit = 5
+const viewChangeAnimationDuration = 250 * time.Millisecond
 
 // Temporary diagnostic switch: keep the screen-sized texture only so we can
 // verify whether full-resolution GPU uploads cause navigation stalls.
@@ -139,6 +140,7 @@ type Viewer struct {
 	fullscreenOriginX         int
 	fullscreenOriginY         int
 	pendingResetFit           bool
+	skipNextFitAnimation      bool
 	windowedPosX              int
 	windowedPosY              int
 	windowedWidth             int
@@ -397,6 +399,7 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 		if activateFit {
 			v.pendingResetFit = true
 			v.animateInitialFit = animateFit
+			v.skipNextFitAnimation = !animateFit
 		}
 	case asyncImageSlotB:
 		oldLoaded = v.imageB
@@ -867,15 +870,19 @@ func (v *Viewer) resetFit() {
 		MirrorScaleX:   v.view.MirrorScaleX,
 		MirrorScaleY:   v.view.MirrorScaleY,
 	}
-	if v.animateInitialFit {
+	if v.skipNextFitAnimation {
+		v.skipNextFitAnimation = false
+		v.stopViewAnimation(true)
+		v.view = targetView
+		v.targetView = targetView
+	} else if v.animateInitialFit {
 		startView := targetView
 		startView.Zoom = targetView.Zoom * 0.01
 		startView.Alpha = 0
 		v.startViewAnimation(startView, targetView, 500*time.Millisecond, 120*time.Millisecond)
 		v.animateInitialFit = false
 	} else {
-		v.stopViewAnimation(true)
-		v.view = targetView
+		v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
 		v.targetView = targetView
 	}
 	v.ensureSliderPosition()
@@ -891,12 +898,13 @@ func (v *Viewer) toggleZoom100Fit() {
 		return
 	}
 
-	v.stopViewAnimation(true)
-	v.view.Zoom = 1
-	v.view.OffsetX = 0
-	v.view.OffsetY = 0
-	v.view.Alpha = 1
-	v.targetView = v.view
+	targetView := v.view
+	targetView.Zoom = 1
+	targetView.OffsetX = 0
+	targetView.OffsetY = 0
+	targetView.Alpha = 1
+	v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
+	v.targetView = targetView
 	v.ensureSliderPosition()
 }
 
