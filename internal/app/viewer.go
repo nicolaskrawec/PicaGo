@@ -95,6 +95,7 @@ type Viewer struct {
 	sliderOpacity         float64
 	circleBorderOpacity   float64
 	showShadow            bool
+	showBlur              bool
 	showHelp              bool
 	compareMask           compareMaskMode
 	circleMaskDiameter    float64
@@ -384,6 +385,9 @@ func (v *Viewer) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
 		v.showShadow = !v.showShadow
 	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyB) {
+		v.showBlur = !v.showBlur
+	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
 		v.toggleBorderlessMaximized()
 	}
@@ -609,6 +613,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 				mouseX,
 				mouseY,
 				v.circleMaskDiameter,
+				v.showBlur,
 				v.reverseCompare,
 				v.circleBorderOpacity,
 				v.showShadow,
@@ -623,6 +628,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 				v.view,
 				v.slider.Position,
 				int(v.slider.Orientation),
+				v.showBlur,
 				v.reverseCompare,
 				v.sliderOpacity,
 				v.showShadow,
@@ -1219,6 +1225,7 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 		ebiten.IsKeyPressed(ebiten.KeySemicolon) ||
 		ebiten.IsKeyPressed(ebiten.KeyL) ||
 		ebiten.IsKeyPressed(ebiten.KeyS) ||
+		ebiten.IsKeyPressed(ebiten.KeyB) ||
 		ebiten.IsKeyPressed(ebiten.KeyF11) ||
 		ebiten.IsKeyPressed(ebiten.KeyC) ||
 		ebiten.IsKeyPressed(ebiten.Key1) ||
@@ -1292,7 +1299,7 @@ func (v *Viewer) updateCursorShape(mouseX, mouseY int, imageRect stdimage.Rectan
 	}
 	ebiten.SetCursorMode(ebiten.CursorModeVisible)
 
-	if v.mode != displayModeCompare || v.compareMask == compareMaskCircle || v.imageA == nil || v.imageB == nil || !imageReady {
+	if v.mode != displayModeCompare || v.imageA == nil || v.imageB == nil || !imageReady {
 		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
 		return
 	}
@@ -1329,6 +1336,15 @@ func (v *Viewer) shouldShowSlider(now time.Time, mouseX, mouseY int, imageRect s
 	}
 	if v.compareMask == compareMaskCircle {
 		return v.draggingImage || v.draggingSlider || v.lastCompareBorderAt.IsZero() || now.Sub(v.lastCompareBorderAt) < compareBorderIdleDelay
+	}
+	if v.compareMask == compareMaskSplit {
+		if v.draggingSlider {
+			return true
+		}
+		if v.sliderNearCursor(mouseX, mouseY, imageRect) {
+			recentActivity := v.lastCompareBorderAt.IsZero() || now.Sub(v.lastCompareBorderAt) < compareBorderIdleDelay
+			return recentActivity
+		}
 	}
 	if v.draggingSlider || v.sliderNearCursor(mouseX, mouseY, imageRect) {
 		return true
@@ -1548,5 +1564,10 @@ func (v *Viewer) helpText() string {
 		shadowMode = "on"
 	}
 
-	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	blurMode := "off"
+	if v.showBlur {
+		blurMode = "on"
+	}
+
+	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }
