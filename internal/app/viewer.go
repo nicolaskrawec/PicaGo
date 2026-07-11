@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -522,13 +523,14 @@ func (v *Viewer) Update() error {
 	wheelDelta := input.WheelDelta()
 	if wheelDelta != 0 {
 		v.markCompareBorderActivity(now)
+		shiftPressed := ebiten.IsKeyPressed(ebiten.KeyShift)
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			if wheelDelta > 0 {
 				_ = v.loadAdjacentImage(-1)
 			} else {
 				_ = v.loadAdjacentImage(1)
 			}
-		} else if v.mode == displayModeCompare && v.compareMask == compareMaskCircle && v.imageB != nil && imageReady {
+		} else if v.mode == displayModeCompare && v.compareMask == compareMaskCircle && v.imageB != nil && imageReady && shiftPressed {
 			v.adjustCircleMaskDiameter(wheelDelta)
 		} else {
 			v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.3, wheelDelta))
@@ -564,6 +566,13 @@ func (v *Viewer) Update() error {
 func (v *Viewer) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{127, 127, 127, 255})
 	newWidth, newHeight := screen.Bounds().Dx(), screen.Bounds().Dy()
+	// A native maximize/restore (the window button) can change the backbuffer
+	// size before Update gets a chance to enter borderless fullscreen. Capture
+	// the split position while the old viewport is still available so it can be
+	// restored relative to the image after the resize.
+	if newWidth != v.windowWidth || newHeight != v.windowHeight {
+		v.prepareSliderRestore()
+	}
 	v.rebaseViewportForResize(newWidth, newHeight)
 	v.windowWidth, v.windowHeight = newWidth, newHeight
 
@@ -1246,6 +1255,17 @@ func (v *Viewer) stopViewAnimation(finish bool) {
 }
 
 func (v *Viewer) updateCursorShape(mouseX, mouseY int, imageRect stdimage.Rectangle, imageReady bool) {
+	if v.compareMask == compareMaskCircle {
+		if v.circleBorderOpacity <= 0 {
+			ebiten.SetCursorMode(ebiten.CursorModeHidden)
+		} else {
+			ebiten.SetCursorMode(ebiten.CursorModeVisible)
+		}
+		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
+		return
+	}
+	ebiten.SetCursorMode(ebiten.CursorModeVisible)
+
 	if v.mode != displayModeCompare || v.compareMask == compareMaskCircle || v.imageA == nil || v.imageB == nil || !imageReady {
 		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
 		return
@@ -1495,10 +1515,12 @@ func (v *Viewer) helpText() string {
 		syncMode = "on"
 	}
 
+	zoomPercent := int(math.Round(v.view.Zoom * 100))
+
 	shadowMode := "off"
 	if v.showShadow {
 		shadowMode = "on"
 	}
 
-	return "PicaGo " + Version + "\nF1 aide\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }
