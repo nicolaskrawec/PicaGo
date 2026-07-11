@@ -485,11 +485,17 @@ func (v *Viewer) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyZ) || inpututil.IsKeyJustPressed(ebiten.KeyW) {
 		v.toggleZoom100Fit()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
+	if !ebiten.IsKeyPressed(ebiten.KeyShift) && !ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
 		_ = v.loadAdjacentImage(-1)
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
+	if !ebiten.IsKeyPressed(ebiten.KeyShift) && !ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
 		_ = v.loadAdjacentImage(1)
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
+		v.rotateImage(-1)
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
+		v.rotateImage(1)
 	}
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
@@ -504,7 +510,7 @@ func (v *Viewer) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyC) && v.imageB != nil {
 		v.setCircleCompare()
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyM) || inpututil.IsKeyJustPressed(ebiten.KeySemicolon) {
+	if ebiten.IsKeyPressed(ebiten.KeyShift) && (inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) || inpututil.IsKeyJustPressed(ebiten.KeyArrowRight)) {
 		v.toggleFlipHorizontal()
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyL) {
@@ -547,7 +553,7 @@ func (v *Viewer) Update() error {
 	imageReady := v.imageA != nil && !v.pendingResetFit && v.view.Zoom > 0
 	var imageRect stdimage.Rectangle
 	if imageReady {
-		imageRect = render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+		imageRect = v.currentImageRect()
 	}
 
 	if leftMousePressed && !v.leftMouseDown {
@@ -674,14 +680,22 @@ func (v *Viewer) Update() error {
 		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
-		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1.15)
+		if ebiten.IsKeyPressed(ebiten.KeyShift) {
+			v.toggleFlipVertical()
+		} else {
+			v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1.15)
+		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
-		v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1/1.15)
+		if ebiten.IsKeyPressed(ebiten.KeyShift) {
+			v.toggleFlipVertical()
+		} else {
+			v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1/1.15)
+		}
 	}
 
 	if v.syncSliderWithImage && v.mode == displayModeCompare && v.compareMask == compareMaskSplit && v.imageA != nil && v.imageB != nil && imageReady && !v.draggingSlider && !v.pendingSliderRestore {
-		syncRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+		syncRect := v.currentImageRect()
 		v.applySliderSync(syncRect)
 	}
 
@@ -826,12 +840,18 @@ func (v *Viewer) resetFit() {
 		return
 	}
 
+	fitWidth, fitHeight := base.Width, base.Height
+	if v.view.Rotation%2 != 0 {
+		fitWidth, fitHeight = fitHeight, fitWidth
+	}
 	targetView := render.View{
-		Zoom:           render.FitZoom(v.windowWidth, v.windowHeight, base.Width, base.Height),
+		Zoom:           render.FitZoom(v.windowWidth, v.windowHeight, fitWidth, fitHeight),
 		OffsetX:        0,
 		OffsetY:        0,
 		Alpha:          1,
 		FlipHorizontal: v.view.FlipHorizontal,
+		FlipVertical:   v.view.FlipVertical,
+		Rotation:       v.view.Rotation,
 	}
 	if v.animateInitialFit {
 		startView := targetView
@@ -876,7 +896,7 @@ func (v *Viewer) restoreWindow() {
 	targetX, targetY := v.windowedPosX, v.windowedPosY
 	targetWidth, targetHeight := v.windowedWidth, v.windowedHeight
 	if v.imageA != nil && v.windowWidth > 0 && v.windowHeight > 0 && v.view.Zoom > 0 {
-		imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+		imageRect := v.currentImageRect()
 		if imageRect.Dx() > 0 && imageRect.Dy() > 0 {
 			targetWidth = imageRect.Dx()
 			targetHeight = imageRect.Dy()
@@ -970,7 +990,7 @@ func (v *Viewer) ensureSliderPosition() {
 		return
 	}
 
-	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+	imageRect := v.currentImageRect()
 	if v.slider.Orientation == compare.OrientationHorizontal {
 		if !v.sliderInitialized {
 			v.slider.Position = float64(imageRect.Min.Y+imageRect.Max.Y) / 2
@@ -1048,6 +1068,23 @@ func (v *Viewer) markCompareBorderActivity(now time.Time) {
 func (v *Viewer) toggleFlipHorizontal() {
 	v.view.FlipHorizontal = !v.view.FlipHorizontal
 	v.targetView.FlipHorizontal = v.view.FlipHorizontal
+}
+
+func (v *Viewer) toggleFlipVertical() {
+	v.view.FlipVertical = !v.view.FlipVertical
+	v.targetView.FlipVertical = v.view.FlipVertical
+}
+
+func (v *Viewer) rotateImage(quarterTurns int) {
+	v.view.Rotation = ((v.view.Rotation+quarterTurns)%4 + 4) % 4
+	v.targetView.Rotation = v.view.Rotation
+}
+
+func (v *Viewer) currentImageRect() stdimage.Rectangle {
+	if v.imageA == nil {
+		return stdimage.Rectangle{}
+	}
+	return render.ImageRectForView(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view)
 }
 
 func (v *Viewer) toggleBorderlessMaximized() {
@@ -1339,13 +1376,13 @@ func (v *Viewer) updateSliderPosition(mouseX, mouseY int) {
 	minPosition, maxPosition := v.sliderDragBounds()
 	if v.slider.Orientation == compare.OrientationHorizontal {
 		v.slider.Position = clampSliderPosition(float64(mouseY), minPosition, maxPosition)
-		imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+		imageRect := v.currentImageRect()
 		v.captureSliderSyncRatio(imageRect)
 		return
 	}
 
 	v.slider.Position = clampSliderPosition(float64(mouseX), minPosition, maxPosition)
-	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+	imageRect := v.currentImageRect()
 	v.captureSliderSyncRatio(imageRect)
 }
 
@@ -1354,7 +1391,7 @@ func (v *Viewer) sliderDragBounds() (float64, float64) {
 		return v.sliderDragMinPosition, v.sliderDragMaxPosition
 	}
 
-	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+	imageRect := v.currentImageRect()
 	if v.slider.Orientation == compare.OrientationHorizontal {
 		return float64(imageRect.Min.Y), float64(imageRect.Max.Y - 1)
 	}
@@ -1413,6 +1450,8 @@ func (v *Viewer) animateView() {
 		v.view.OffsetY = lerpFloat(v.viewAnimationFrom.OffsetY, v.viewAnimationTo.OffsetY, eased)
 		v.view.Alpha = lerpFloat(v.viewAnimationFrom.Alpha, v.viewAnimationTo.Alpha, eased)
 		v.view.FlipHorizontal = v.viewAnimationTo.FlipHorizontal
+		v.view.FlipVertical = v.viewAnimationTo.FlipVertical
+		v.view.Rotation = v.viewAnimationTo.Rotation
 		v.targetView = v.viewAnimationTo
 		return
 	}
@@ -1488,8 +1527,6 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 		ebiten.IsKeyPressed(ebiten.KeyF1) ||
 		ebiten.IsKeyPressed(ebiten.KeyH) ||
 		ebiten.IsKeyPressed(ebiten.KeyV) ||
-		ebiten.IsKeyPressed(ebiten.KeyM) ||
-		ebiten.IsKeyPressed(ebiten.KeySemicolon) ||
 		ebiten.IsKeyPressed(ebiten.KeyL) ||
 		ebiten.IsKeyPressed(ebiten.KeyS) ||
 		ebiten.IsKeyPressed(ebiten.KeyB) ||
@@ -1525,7 +1562,9 @@ func viewAlmostEqual(a, b render.View) bool {
 		math.Abs(a.OffsetX-b.OffsetX) < 0.001 &&
 		math.Abs(a.OffsetY-b.OffsetY) < 0.001 &&
 		math.Abs(a.Alpha-b.Alpha) < 0.001 &&
-		a.FlipHorizontal == b.FlipHorizontal
+		a.FlipHorizontal == b.FlipHorizontal &&
+		a.FlipVertical == b.FlipVertical &&
+		a.Rotation == b.Rotation
 }
 
 func (v *Viewer) startViewAnimation(from, to render.View, duration, delay time.Duration) {
@@ -1749,7 +1788,7 @@ func (v *Viewer) prepareSliderRestore() {
 		return
 	}
 
-	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+	imageRect := v.currentImageRect()
 	if imageRect.Empty() {
 		return
 	}
@@ -1768,7 +1807,7 @@ func (v *Viewer) restoreSliderAfterResize() {
 		return
 	}
 
-	imageRect := render.ImageRect(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, v.view.Zoom, v.view.OffsetX, v.view.OffsetY)
+	imageRect := v.currentImageRect()
 	if imageRect.Empty() {
 		return
 	}
@@ -1836,7 +1875,8 @@ func (v *Viewer) helpText() string {
 		blurMode = "on"
 	}
 
-	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nMémoire : " + v.memoryStatusText() + "\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	rotation := v.view.Rotation * 90
+	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nRotation : " + strconv.Itoa(rotation) + " deg\nMémoire : " + v.memoryStatusText() + "\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nShift+gauche/droite : miroir horizontal\nShift+haut/bas : miroir vertical\nCtrl+gauche : rotation anti-horaire\nCtrl+droite : rotation horaire\nMolette : zoom image\nShift+molette : zoom masque cercle\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }
 
 func (v *Viewer) memoryStatusText() string {
