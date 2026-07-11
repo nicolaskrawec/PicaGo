@@ -19,6 +19,9 @@ type View struct {
 	FlipHorizontal bool
 	FlipVertical   bool
 	Rotation       int // clockwise quarter turns
+	RotationAngle  float64
+	MirrorScaleX   float64
+	MirrorScaleY   float64
 }
 
 type imageFrameShadow struct {
@@ -55,10 +58,17 @@ func ImageRect(windowWidth, windowHeight, imageWidth, imageHeight int, zoom, off
 }
 
 func ImageRectForView(windowWidth, windowHeight, imageWidth, imageHeight int, view View) stdimage.Rectangle {
-	if view.Rotation%2 != 0 {
-		imageWidth, imageHeight = imageHeight, imageWidth
-	}
-	return ImageRect(windowWidth, windowHeight, imageWidth, imageHeight, view.Zoom, view.OffsetX, view.OffsetY)
+	width, height := rotatedDimensions(imageWidth, imageHeight, view)
+	return ImageRect(windowWidth, windowHeight, width, height, view.Zoom, view.OffsetX, view.OffsetY)
+}
+
+func rotatedDimensions(imageWidth, imageHeight int, view View) (int, int) {
+	angle := view.RotationAngle
+	radians := angle * math.Pi / 2
+	cosine := math.Abs(math.Cos(radians))
+	sine := math.Abs(math.Sin(radians))
+	return maxInt(1, int(math.Round(float64(imageWidth)*cosine+float64(imageHeight)*sine))),
+		maxInt(1, int(math.Round(float64(imageWidth)*sine+float64(imageHeight)*cosine)))
 }
 
 func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth, windowHeight int, view View, showShadow bool) {
@@ -70,7 +80,8 @@ func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth,
 	if showShadow {
 		drawShadow(screen, loaded.Width, loaded.Height, windowWidth, windowHeight, rect, view.Alpha)
 	}
-	drawTexture(screen, loaded.GPUTexture, rect, view.FlipHorizontal, view.FlipVertical, view.Rotation, view.Alpha)
+	rotationAngle := view.RotationAngle
+	drawTexture(screen, loaded.GPUTexture, rect, view.FlipHorizontal, view.FlipVertical, rotationAngle, view.MirrorScaleX, view.MirrorScaleY, view.Alpha)
 }
 
 func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, sliderPosition float64, orientation int, feathered bool, reverse bool, sliderOpacity float64, showShadow bool) {
@@ -80,10 +91,7 @@ func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, wi
 	}
 
 	rectA := ImageRectForView(windowWidth, windowHeight, imageA.Width, imageA.Height, view)
-	imageBWidth, imageBHeight := imageB.Width, imageB.Height
-	if view.Rotation%2 != 0 {
-		imageBWidth, imageBHeight = imageBHeight, imageBWidth
-	}
+	imageBWidth, imageBHeight := rotatedDimensions(imageB.Width, imageB.Height, view)
 	rectB := compareRect(rectA, imageBWidth, imageBHeight)
 	switch orientation {
 	case 1:
@@ -122,10 +130,7 @@ func DrawCompareCircle(screen *ebiten.Image, imageA, imageB *imagedata.LoadedIma
 	}
 
 	rectA := ImageRectForView(windowWidth, windowHeight, imageA.Width, imageA.Height, view)
-	imageBWidth, imageBHeight := imageB.Width, imageB.Height
-	if view.Rotation%2 != 0 {
-		imageBWidth, imageBHeight = imageBHeight, imageBWidth
-	}
+	imageBWidth, imageBHeight := rotatedDimensions(imageB.Width, imageB.Height, view)
 	rectB := compareRect(rectA, imageBWidth, imageBHeight)
 	radius := float64(minInt(rectA.Dx(), rectA.Dy())) * clampFloat64(diameterRatio, 0.02, 1) / 2
 	if radius <= 0 {
@@ -133,7 +138,7 @@ func DrawCompareCircle(screen *ebiten.Image, imageA, imageB *imagedata.LoadedIma
 	}
 
 	if reverse {
-		drawTexture(screen, imageB.GPUTexture, rectB, view.FlipHorizontal, view.FlipVertical, view.Rotation, view.Alpha)
+		drawTexture(screen, imageB.GPUTexture, rectB, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, 0, 0, view.Alpha)
 		if feathered {
 			drawCircularTextureFeathered(screen, imageA.GPUTexture, rectA, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.FlipVertical, view.Rotation, view.Alpha)
 		} else {
@@ -307,7 +312,7 @@ func drawCircleStroke(screen *ebiten.Image, centerX, centerY, radius float32, st
 	vector.StrokePath(screen, path, &vector.StrokeOptions{Width: width}, options)
 }
 
-func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation int, alpha float64) {
+func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha float64) {
 	if texture == nil || destRect.Empty() {
 		return
 	}
@@ -315,12 +320,10 @@ func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.
 	options := &ebiten.DrawImageOptions{}
 	options.Filter = ebiten.FilterLinear
 	options.ColorScale.ScaleAlpha(float32(clampAlpha(alpha)))
-	scaleX := float64(destRect.Dx()) / float64(texture.Bounds().Dx())
-	scaleY := float64(destRect.Dy()) / float64(texture.Bounds().Dy())
-	if rotation%2 != 0 {
-		scaleX = float64(destRect.Dy()) / float64(texture.Bounds().Dx())
-		scaleY = float64(destRect.Dx()) / float64(texture.Bounds().Dy())
-	}
+	radians := rotation * math.Pi / 2
+	rotatedWidth := float64(texture.Bounds().Dx())*math.Abs(math.Cos(radians)) + float64(texture.Bounds().Dy())*math.Abs(math.Sin(radians))
+	scale := float64(destRect.Dx()) / math.Max(1, rotatedWidth)
+	scaleX, scaleY := scale, scale
 	scaleXSign, scaleYSign := 1.0, 1.0
 	translateX, translateY := float64(destRect.Min.X), float64(destRect.Min.Y)
 	if flipHorizontal {
@@ -331,12 +334,20 @@ func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.
 		scaleYSign = -1
 		translateY = float64(destRect.Max.Y)
 	}
-	if rotation%4 != 0 {
+	if mirrorScaleX != 0 {
+		scaleXSign = mirrorScaleX
+		translateX = float64(destRect.Min.X+destRect.Max.X)/2 - float64(destRect.Dx())*mirrorScaleX/2
+	}
+	if mirrorScaleY != 0 {
+		scaleYSign = mirrorScaleY
+		translateY = float64(destRect.Min.Y+destRect.Max.Y)/2 - float64(destRect.Dy())*mirrorScaleY/2
+	}
+	if math.Abs(rotation) > 0.001 {
 		// Rotate around the center of the destination rectangle. For odd
 		// quarter turns destRect already has swapped dimensions.
 		options.GeoM.Translate(-float64(texture.Bounds().Dx())/2, -float64(texture.Bounds().Dy())/2)
 		options.GeoM.Scale(scaleX*scaleXSign, scaleY*scaleYSign)
-		options.GeoM.Rotate(float64(rotation%4) * math.Pi / 2)
+		options.GeoM.Rotate(rotation * math.Pi / 2)
 		options.GeoM.Translate(float64(destRect.Min.X+destRect.Max.X)/2, float64(destRect.Min.Y+destRect.Max.Y)/2)
 	} else {
 		options.GeoM.Scale(scaleX*scaleXSign, scaleY*scaleYSign)

@@ -132,51 +132,61 @@ type Viewer struct {
 	viewportBaseWidth     int
 	viewportBaseHeight    int
 
-	borderlessMaximized      bool
-	pendingInitialBorderless bool
-	pendingEnterFullscreen   bool
-	enterFromNativeMaximize  bool
-	fullscreenOriginX        int
-	fullscreenOriginY        int
-	pendingResetFit          bool
-	windowedPosX             int
-	windowedPosY             int
-	windowedWidth            int
-	windowedHeight           int
-	hasWindowedState         bool
-	restoreClickPending      bool
-	restoreClickStartX       int
-	restoreClickStartY       int
-	lastImageClickAt         time.Time
-	lastImageClickX          int
-	lastImageClickY          int
-	lastActivityAt           time.Time
-	idleFPSMode              bool
-	idleMouseTracked         bool
-	idleMouseX               int
-	idleMouseY               int
-	viewAnimationActive      bool
-	viewAnimationStart       time.Time
-	viewAnimationLength      time.Duration
-	viewAnimationDelayUntil  time.Time
-	viewAnimationFrom        render.View
-	viewAnimationTo          render.View
-	animateInitialFit        bool
-	nextImageLoadID          int
-	pendingImageLoadAID      int
-	pendingImageLoadBID      int
-	imageLoadResults         chan asyncImageResult
-	prefetchResults          chan prefetchedImageResult
-	prefetchInFlight         map[string]bool
-	prefetchSlots            chan struct{}
-	prefetchedImages         map[string]*imagedata.DecodedImage
-	prefetchOrder            []string
-	pendingHighRes           [2]*pendingHighResImage
-	initialPrefetchPending   bool
-	navigationDirectory      string
-	navigationImages         []string
-	loadingImageName         string
-	loadError                string
+	borderlessMaximized       bool
+	pendingInitialBorderless  bool
+	pendingEnterFullscreen    bool
+	enterFromNativeMaximize   bool
+	fullscreenOriginX         int
+	fullscreenOriginY         int
+	pendingResetFit           bool
+	windowedPosX              int
+	windowedPosY              int
+	windowedWidth             int
+	windowedHeight            int
+	hasWindowedState          bool
+	restoreClickPending       bool
+	restoreClickStartX        int
+	restoreClickStartY        int
+	lastImageClickAt          time.Time
+	lastImageClickX           int
+	lastImageClickY           int
+	lastActivityAt            time.Time
+	idleFPSMode               bool
+	idleMouseTracked          bool
+	idleMouseX                int
+	idleMouseY                int
+	viewAnimationActive       bool
+	viewAnimationStart        time.Time
+	viewAnimationLength       time.Duration
+	viewAnimationDelayUntil   time.Time
+	viewAnimationFrom         render.View
+	viewAnimationTo           render.View
+	animateInitialFit         bool
+	rotationAnimationActive   bool
+	rotationAnimationStart    time.Time
+	rotationAnimationFrom     float64
+	rotationAnimationTo       float64
+	pendingRotationTurns      int
+	mirrorAnimationActive     bool
+	mirrorAnimationStart      time.Time
+	mirrorAnimationFrom       float64
+	mirrorAnimationTo         float64
+	mirrorAnimationHorizontal bool
+	nextImageLoadID           int
+	pendingImageLoadAID       int
+	pendingImageLoadBID       int
+	imageLoadResults          chan asyncImageResult
+	prefetchResults           chan prefetchedImageResult
+	prefetchInFlight          map[string]bool
+	prefetchSlots             chan struct{}
+	prefetchedImages          map[string]*imagedata.DecodedImage
+	prefetchOrder             []string
+	pendingHighRes            [2]*pendingHighResImage
+	initialPrefetchPending    bool
+	navigationDirectory       string
+	navigationImages          []string
+	loadingImageName          string
+	loadError                 string
 }
 
 func Run(args []string) error {
@@ -726,6 +736,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	}
 	v.rebaseViewportForResize(newWidth, newHeight)
 	v.windowWidth, v.windowHeight = newWidth, newHeight
+	showShadow := v.showShadow && !v.rotationAnimationActive && !v.mirrorAnimationActive
 
 	if v.pendingResetFit {
 		if v.borderlessMaximized && v.hasWindowedState && v.windowWidth == v.windowedWidth && v.windowHeight == v.windowedHeight {
@@ -737,9 +748,9 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 
 	switch v.mode {
 	case displayModeSingleA:
-		render.DrawImage(screen, v.imageA, v.windowWidth, v.windowHeight, v.view, v.showShadow)
+		render.DrawImage(screen, v.imageA, v.windowWidth, v.windowHeight, v.view, showShadow)
 	case displayModeSingleB:
-		render.DrawImage(screen, v.imageB, v.windowWidth, v.windowHeight, v.view, v.showShadow)
+		render.DrawImage(screen, v.imageB, v.windowWidth, v.windowHeight, v.view, showShadow)
 	case displayModeCompare:
 		v.restoreSliderAfterResize()
 		v.ensureSliderPosition()
@@ -758,7 +769,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 				v.showBlur,
 				v.reverseCompare,
 				v.circleBorderOpacity,
-				v.showShadow,
+				showShadow,
 			)
 		} else {
 			render.DrawCompare(
@@ -773,7 +784,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 				v.showBlur,
 				v.reverseCompare,
 				v.sliderOpacity,
-				v.showShadow,
+				showShadow,
 			)
 		}
 	}
@@ -852,6 +863,9 @@ func (v *Viewer) resetFit() {
 		FlipHorizontal: v.view.FlipHorizontal,
 		FlipVertical:   v.view.FlipVertical,
 		Rotation:       v.view.Rotation,
+		RotationAngle:  v.view.RotationAngle,
+		MirrorScaleX:   v.view.MirrorScaleX,
+		MirrorScaleY:   v.view.MirrorScaleY,
 	}
 	if v.animateInitialFit {
 		startView := targetView
@@ -1066,18 +1080,61 @@ func (v *Viewer) markCompareBorderActivity(now time.Time) {
 }
 
 func (v *Viewer) toggleFlipHorizontal() {
-	v.view.FlipHorizontal = !v.view.FlipHorizontal
-	v.targetView.FlipHorizontal = v.view.FlipHorizontal
+	v.startMirrorAnimation(true)
 }
 
 func (v *Viewer) toggleFlipVertical() {
-	v.view.FlipVertical = !v.view.FlipVertical
-	v.targetView.FlipVertical = v.view.FlipVertical
+	v.startMirrorAnimation(false)
+}
+
+func (v *Viewer) startMirrorAnimation(horizontal bool) {
+	if v.mirrorAnimationActive && v.mirrorAnimationHorizontal == horizontal {
+		v.mirrorAnimationFrom = v.mirrorAnimationTo
+		v.mirrorAnimationTo = -v.mirrorAnimationTo
+	} else {
+		from := 1.0
+		if (horizontal && v.view.FlipHorizontal) || (!horizontal && v.view.FlipVertical) {
+			from = -1
+		}
+		v.mirrorAnimationFrom = from
+		v.mirrorAnimationTo = -from
+	}
+	v.mirrorAnimationHorizontal = horizontal
+	v.mirrorAnimationStart = time.Now()
+	v.mirrorAnimationActive = true
+	if horizontal {
+		v.view.FlipHorizontal = v.mirrorAnimationTo < 0
+		v.targetView.FlipHorizontal = v.view.FlipHorizontal
+		v.view.MirrorScaleX = v.mirrorAnimationFrom
+		v.targetView.MirrorScaleX = v.mirrorAnimationTo
+	} else {
+		v.view.FlipVertical = v.mirrorAnimationTo < 0
+		v.targetView.FlipVertical = v.view.FlipVertical
+		v.view.MirrorScaleY = v.mirrorAnimationFrom
+		v.targetView.MirrorScaleY = v.mirrorAnimationTo
+	}
 }
 
 func (v *Viewer) rotateImage(quarterTurns int) {
-	v.view.Rotation = ((v.view.Rotation+quarterTurns)%4 + 4) % 4
-	v.targetView.Rotation = v.view.Rotation
+	if v.rotationAnimationActive {
+		v.pendingRotationTurns += quarterTurns
+		return
+	}
+	v.startRotationAnimation(quarterTurns)
+}
+
+func (v *Viewer) startRotationAnimation(quarterTurns int) {
+	from := v.view.RotationAngle
+	target := ((v.view.Rotation+quarterTurns)%4 + 4) % 4
+	to := from + float64(quarterTurns)
+	v.view.Rotation = target
+	v.targetView.Rotation = target
+	v.view.RotationAngle = from
+	v.targetView.RotationAngle = to
+	v.rotationAnimationFrom = from
+	v.rotationAnimationTo = to
+	v.rotationAnimationStart = time.Now()
+	v.rotationAnimationActive = true
 }
 
 func (v *Viewer) currentImageRect() stdimage.Rectangle {
@@ -1427,6 +1484,47 @@ func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
 }
 
 func (v *Viewer) animateView() {
+	if v.mirrorAnimationActive {
+		elapsed := time.Since(v.mirrorAnimationStart)
+		const mirrorAnimationDuration = 250 * time.Millisecond
+		if elapsed >= mirrorAnimationDuration {
+			if v.mirrorAnimationHorizontal {
+				v.view.MirrorScaleX = v.mirrorAnimationTo
+			} else {
+				v.view.MirrorScaleY = v.mirrorAnimationTo
+			}
+			v.mirrorAnimationActive = false
+		} else {
+			t := float64(elapsed) / float64(mirrorAnimationDuration)
+			eased := 1 - math.Pow(1-t, 3)
+			scale := lerpFloat(v.mirrorAnimationFrom, v.mirrorAnimationTo, eased)
+			if v.mirrorAnimationHorizontal {
+				v.view.MirrorScaleX = scale
+			} else {
+				v.view.MirrorScaleY = scale
+			}
+		}
+	}
+	if v.rotationAnimationActive {
+		elapsed := time.Since(v.rotationAnimationStart)
+		const rotationAnimationDuration = 250 * time.Millisecond
+		if elapsed >= rotationAnimationDuration {
+			v.view.RotationAngle = v.rotationAnimationTo
+			v.rotationAnimationActive = false
+			if v.pendingRotationTurns != 0 {
+				step := 1
+				if v.pendingRotationTurns < 0 {
+					step = -1
+				}
+				v.pendingRotationTurns -= step
+				v.startRotationAnimation(step)
+			}
+		} else {
+			t := float64(elapsed) / float64(rotationAnimationDuration)
+			eased := 1 - math.Pow(1-t, 3)
+			v.view.RotationAngle = lerpFloat(v.rotationAnimationFrom, v.rotationAnimationTo, eased)
+		}
+	}
 	if v.viewAnimationActive {
 		now := time.Now()
 		if now.Before(v.viewAnimationDelayUntil) {
@@ -1452,6 +1550,7 @@ func (v *Viewer) animateView() {
 		v.view.FlipHorizontal = v.viewAnimationTo.FlipHorizontal
 		v.view.FlipVertical = v.viewAnimationTo.FlipVertical
 		v.view.Rotation = v.viewAnimationTo.Rotation
+		v.view.RotationAngle = v.viewAnimationTo.RotationAngle
 		v.targetView = v.viewAnimationTo
 		return
 	}
@@ -1501,6 +1600,10 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 	}
 
 	if v.viewAnimationActive {
+		return true
+	}
+
+	if v.rotationAnimationActive {
 		return true
 	}
 
@@ -1564,7 +1667,10 @@ func viewAlmostEqual(a, b render.View) bool {
 		math.Abs(a.Alpha-b.Alpha) < 0.001 &&
 		a.FlipHorizontal == b.FlipHorizontal &&
 		a.FlipVertical == b.FlipVertical &&
-		a.Rotation == b.Rotation
+		a.Rotation == b.Rotation &&
+		math.Abs(a.RotationAngle-b.RotationAngle) < 0.001 &&
+		math.Abs(a.MirrorScaleX-b.MirrorScaleX) < 0.001 &&
+		math.Abs(a.MirrorScaleY-b.MirrorScaleY) < 0.001
 }
 
 func (v *Viewer) startViewAnimation(from, to render.View, duration, delay time.Duration) {
