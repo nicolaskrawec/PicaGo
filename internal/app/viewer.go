@@ -739,7 +739,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	}
 	v.rebaseViewportForResize(newWidth, newHeight)
 	v.windowWidth, v.windowHeight = newWidth, newHeight
-	showShadow := v.showShadow && !v.rotationAnimationActive && !v.mirrorAnimationActive
+	showShadow := v.showShadow
 
 	if v.pendingResetFit {
 		if v.borderlessMaximized && v.hasWindowedState && v.windowWidth == v.windowedWidth && v.windowHeight == v.windowedHeight {

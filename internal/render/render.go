@@ -78,7 +78,7 @@ func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth,
 
 	rect := ImageRectForView(windowWidth, windowHeight, loaded.Width, loaded.Height, view)
 	if showShadow {
-		drawShadow(screen, loaded.Width, loaded.Height, windowWidth, windowHeight, rect, view.Alpha)
+		drawShadow(screen, loaded.Width, loaded.Height, windowWidth, windowHeight, rect, view)
 	}
 	rotationAngle := view.RotationAngle
 	drawTexture(screen, loaded.GPUTexture, rect, view.FlipHorizontal, view.FlipVertical, rotationAngle, view.MirrorScaleX, view.MirrorScaleY, view.Alpha)
@@ -419,8 +419,8 @@ func clampBoundary(value, min, max int) int {
 	return value
 }
 
-func drawShadow(screen *ebiten.Image, imageWidth, imageHeight, windowWidth, windowHeight int, rect stdimage.Rectangle, alpha float64) {
-	shadowAlpha := clampAlpha(alpha)
+func drawShadow(screen *ebiten.Image, imageWidth, imageHeight, windowWidth, windowHeight int, rect stdimage.Rectangle, view View) {
+	shadowAlpha := clampAlpha(view.Alpha)
 	if shadowAlpha <= 0 {
 		return
 	}
@@ -444,16 +444,32 @@ func drawShadow(screen *ebiten.Image, imageWidth, imageHeight, windowWidth, wind
 		return
 	}
 
-	scaleX := float64(rect.Dx()) / float64(baseWidth)
-	scaleY := float64(rect.Dy()) / float64(baseHeight)
+	imageScale := view.Zoom / fitZoom
+	if imageScale <= 0 {
+		return
+	}
 	options := &ebiten.DrawImageOptions{}
 	options.Filter = ebiten.FilterLinear
 	options.ColorScale.ScaleAlpha(float32(shadowAlpha))
-	options.GeoM.Scale(scaleX, scaleY)
-	options.GeoM.Translate(
-		float64(rect.Min.X)-float64(spread)*scaleX,
-		float64(rect.Min.Y)-float64(spread)*scaleY,
-	)
+	shadowWidth := float64(shadowCache.img.Bounds().Dx())
+	shadowHeight := float64(shadowCache.img.Bounds().Dy())
+	mirrorX, mirrorY := 1.0, 1.0
+	if view.FlipHorizontal {
+		mirrorX = -1
+	}
+	if view.FlipVertical {
+		mirrorY = -1
+	}
+	if view.MirrorScaleX != 0 {
+		mirrorX = view.MirrorScaleX
+	}
+	if view.MirrorScaleY != 0 {
+		mirrorY = view.MirrorScaleY
+	}
+	options.GeoM.Translate(-shadowWidth/2, -shadowHeight/2)
+	options.GeoM.Scale(imageScale*mirrorX, imageScale*mirrorY)
+	options.GeoM.Rotate(view.RotationAngle * math.Pi / 2)
+	options.GeoM.Translate(float64(rect.Min.X+rect.Max.X)/2, float64(rect.Min.Y+rect.Max.Y)/2)
 	screen.DrawImage(shadowCache.img, options)
 }
 
