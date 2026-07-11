@@ -20,19 +20,21 @@ import (
 )
 
 type LoadedImage struct {
-	FileName   string
-	FilePath   string
-	Width      int
-	Height     int
-	GPUTexture *ebiten.Image
+	FileName        string
+	FilePath        string
+	Width           int
+	Height          int
+	HasTransparency bool
+	GPUTexture      *ebiten.Image
 }
 
 type DecodedImage struct {
-	FileName string
-	FilePath string
-	Width    int
-	Height   int
-	Image    stddraw.Image
+	FileName        string
+	FilePath        string
+	Width           int
+	Height          int
+	HasTransparency bool
+	Image           stddraw.Image
 	// Preview is deliberately kept separate from Image: it can be uploaded to
 	// the GPU quickly while the full-resolution texture is deferred.
 	Preview stddraw.Image
@@ -123,11 +125,12 @@ func decodeFromReader(reader io.Reader, fileName, filePath string, maxDimension 
 
 	bounds := decoded.Bounds()
 	result := &DecodedImage{
-		FileName: fileName,
-		FilePath: filePath,
-		Width:    bounds.Dx(),
-		Height:   bounds.Dy(),
-		Image:    decoded,
+		FileName:        fileName,
+		FilePath:        filePath,
+		Width:           bounds.Dx(),
+		Height:          bounds.Dy(),
+		HasTransparency: hasTransparency(decoded),
+		Image:           decoded,
 	}
 	if maxDimension > 0 {
 		result.Preview = makePreview(decoded, maxDimension)
@@ -152,17 +155,35 @@ func makePreview(source stddraw.Image, maxDimension int) stddraw.Image {
 	return preview
 }
 
+func hasTransparency(source stddraw.Image) bool {
+	switch source.(type) {
+	case *stddraw.Gray, *stddraw.Gray16, *stddraw.YCbCr:
+		return false
+	}
+	bounds := source.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			_, _, _, alpha := source.At(x, y).RGBA()
+			if alpha < 0xffff {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func NewLoadedImage(decoded *DecodedImage) *LoadedImage {
 	if decoded == nil {
 		return nil
 	}
 
 	return &LoadedImage{
-		FileName:   decoded.FileName,
-		FilePath:   decoded.FilePath,
-		Width:      decoded.Width,
-		Height:     decoded.Height,
-		GPUTexture: ebiten.NewImageFromImage(decoded.Image),
+		FileName:        decoded.FileName,
+		FilePath:        decoded.FilePath,
+		Width:           decoded.Width,
+		Height:          decoded.Height,
+		HasTransparency: decoded.HasTransparency,
+		GPUTexture:      ebiten.NewImageFromImage(decoded.Image),
 	}
 }
 
@@ -177,7 +198,8 @@ func NewLoadedPreviewImage(decoded *DecodedImage) *LoadedImage {
 	return &LoadedImage{
 		FileName: decoded.FileName, FilePath: decoded.FilePath,
 		Width: decoded.Width, Height: decoded.Height,
-		GPUTexture: ebiten.NewImageFromImage(textureSource),
+		HasTransparency: decoded.HasTransparency,
+		GPUTexture:      ebiten.NewImageFromImage(textureSource),
 	}
 }
 

@@ -77,7 +77,7 @@ func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth,
 	}
 
 	rect := ImageRectForView(windowWidth, windowHeight, loaded.Width, loaded.Height, view)
-	if showShadow {
+	if showShadow && !loaded.HasTransparency {
 		drawShadow(screen, loaded.Width, loaded.Height, windowWidth, windowHeight, rect, view)
 	}
 	rotationAngle := view.RotationAngle
