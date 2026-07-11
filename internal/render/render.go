@@ -562,6 +562,9 @@ func (s *imageFrameShadow) update(w, h, spread, radius int) {
 	s.h = h
 	s.spread = spread
 	s.radius = radius
+	if s.img != nil {
+		s.img.Deallocate()
+	}
 	s.img = buildShadowImage(w, h, spread, radius, 0.2)
 }
 

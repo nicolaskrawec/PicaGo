@@ -75,7 +75,7 @@ const cornerCommandTolerance = 25
 const bottomCommandHeight = 40
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
-const prefetchedImageCacheLimit = 5
+const prefetchedImageCacheLimit = 3
 const viewChangeAnimationDuration = 250 * time.Millisecond
 
 // Temporary diagnostic switch: keep the screen-sized texture only so we can
@@ -210,7 +210,7 @@ func Run(args []string) error {
 		imageLoadResults:      make(chan asyncImageResult, 4),
 		prefetchResults:       make(chan prefetchedImageResult, 4),
 		prefetchInFlight:      make(map[string]bool),
-		prefetchSlots:         make(chan struct{}, 4),
+		prefetchSlots:         make(chan struct{}, 2),
 		prefetchedImages:      make(map[string]*imagedata.DecodedImage),
 		imageViewStates:       make(map[string]render.View),
 		invalidatedZoomStates: make(map[string]bool),
@@ -349,6 +349,8 @@ func (v *Viewer) collectPrefetchedImages() {
 			delete(v.prefetchInFlight, result.path)
 			if result.err == nil && result.decoded != nil {
 				v.cachePrefetchedImage(result.path, result.decoded)
+			} else {
+				result.decoded.Release()
 			}
 		default:
 			return
@@ -365,6 +367,7 @@ func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 	v.loadingImageName = ""
 
 	if result.err != nil {
+		result.decoded.Release()
 		v.loadError = result.err.Error()
 		ebiten.SetWindowTitle(windowTitle("load failed"))
 		return
@@ -376,6 +379,7 @@ func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.DecodedImage, resetView, animateFit, activateFit bool) {
 	loaded := imagedata.NewLoadedPreviewImage(decoded)
 	if loaded == nil {
+		decoded.Release()
 		v.loadError = "image load failed"
 		ebiten.SetWindowTitle(windowTitle("load failed"))
 		return
@@ -1330,7 +1334,7 @@ func (v *Viewer) prefetchAdjacentImages() {
 	}
 
 	wanted := make(map[string]bool, prefetchedImageCacheLimit)
-	for _, offset := range []int{-2, -1, 1, 2, 3} {
+	for _, offset := range []int{-1, 1, 2} {
 		index := currentIndex + offset
 		if index >= 0 && index < len(images) {
 			wanted[images[index]] = true
@@ -1391,7 +1395,7 @@ func (v *Viewer) isWantedPrefetchPath(path string) bool {
 	if err != nil || currentIndex < 0 {
 		return false
 	}
-	for _, offset := range []int{-2, -1, 1, 2, 3} {
+	for _, offset := range []int{-1, 1, 2} {
 		index := currentIndex + offset
 		if index >= 0 && index < len(images) && images[index] == path {
 			return true
@@ -1772,6 +1776,10 @@ func (v *Viewer) updateFramePacing(now time.Time, active bool) {
 	if !v.idleFPSMode && now.Sub(v.lastActivityAt) >= idleFrameDelay {
 		ebiten.SetFPSMode(ebiten.FPSModeVsyncOffMinimum)
 		v.idleFPSMode = true
+		// Image decodes and cache evictions may have released large CPU-side
+		// buffers. Run one collection when the viewer becomes idle, rather than
+		// adding GC pauses to active navigation.
+		runtime.GC()
 	}
 }
 
