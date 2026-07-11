@@ -72,6 +72,7 @@ type pendingHighResImage struct {
 const idleFrameDelay = 500 * time.Millisecond
 const compareBorderIdleDelay = 600 * time.Millisecond
 const cornerCommandTolerance = 25
+const bottomCommandHeight = 40
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
 const prefetchedImageCacheLimit = 5
@@ -107,6 +108,7 @@ type Viewer struct {
 	sliderDragMinPosition   float64
 	sliderDragMaxPosition   float64
 	leftMouseDown           bool
+	rightMouseDown          bool
 	ignoreMouseUntilRelease bool
 	lastMouseX              int
 	lastMouseY              int
@@ -560,6 +562,9 @@ func (v *Viewer) Update() error {
 
 	leftMousePressed := ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
 	rightMousePressed := ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight)
+	if !rightMousePressed {
+		v.rightMouseDown = false
+	}
 	mouseX, mouseY := ebiten.CursorPosition()
 	mouseMoved := false
 	if v.idleMouseTracked {
@@ -588,6 +593,11 @@ func (v *Viewer) Update() error {
 
 	if leftMousePressed && !v.leftMouseDown {
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
+			_ = v.loadAdjacentImage(-1)
+			v.leftMouseDown = true
+			return nil
+		}
+		if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
 			_ = v.loadAdjacentImage(-1)
 			v.leftMouseDown = true
 			return nil
@@ -646,9 +656,15 @@ func (v *Viewer) Update() error {
 			v.sliderDragMaxPosition = 0
 		}
 	}
-	if rightMousePressed {
+	if rightMousePressed && !v.rightMouseDown {
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			_ = v.loadAdjacentImage(1)
+			v.rightMouseDown = true
+			return nil
+		}
+		if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
+			_ = v.loadAdjacentImage(1)
+			v.rightMouseDown = true
 			return nil
 		}
 	}
@@ -698,6 +714,12 @@ func (v *Viewer) Update() error {
 		v.markCompareBorderActivity(now)
 		shiftPressed := ebiten.IsKeyPressed(ebiten.KeyShift)
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
+			if wheelDelta > 0 {
+				_ = v.loadAdjacentImage(-1)
+			} else {
+				_ = v.loadAdjacentImage(1)
+			}
+		} else if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
 			if wheelDelta > 0 {
 				_ = v.loadAdjacentImage(-1)
 			} else {
@@ -828,8 +850,10 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	drawCornerHints(
 		screen,
 		v.windowWidth,
+		v.windowHeight,
 		pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance),
 		pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance),
+		v.imageA != nil && !v.pendingResetFit && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight),
 	)
 
 	if v.showHelp {
@@ -842,7 +866,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	}
 }
 
-func drawCornerHints(screen *ebiten.Image, windowWidth int, showTopLeft, showTopRight bool) {
+func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTopLeft, showTopRight, showBottomLeft bool) {
 	const size = float32(40)
 	fill := color.NRGBA{48, 48, 48, cornerHintAlpha}
 	options := &vector.DrawPathOptions{AntiAlias: true}
@@ -870,6 +894,19 @@ func drawCornerHints(screen *ebiten.Image, windowWidth int, showTopLeft, showTop
 		options.ColorScale.ScaleWithColor(fill)
 		vector.FillPath(screen, topRight, &vector.FillOptions{}, options)
 		ebitenutil.DebugPrintAt(screen, "X", windowWidth-16, 8)
+	}
+
+	if showBottomLeft && windowWidth > 0 && windowHeight > 0 {
+		left := float32(0)
+		top := float32(maxInt(0, windowHeight-bottomCommandHeight))
+		width := float32(windowWidth)
+		height := float32(windowHeight) - top
+		options.ColorScale.Reset()
+		options.ColorScale.ScaleWithColor(fill)
+		vector.FillRect(screen, left, top, width, height, fill, true)
+		indicator := "< >"
+		indicatorWidth := len(indicator) * 6
+		ebitenutil.DebugPrintAt(screen, indicator, windowWidth/2-indicatorWidth/2, int(top)+12)
 	}
 }
 
@@ -1381,6 +1418,13 @@ func pointInTopLeftCorner(x, y, tolerance int) bool {
 		return false
 	}
 	return x >= 0 && x < tolerance && y >= 0 && y < tolerance
+}
+
+func pointInBottomBar(x, y, windowWidth, windowHeight int) bool {
+	if windowWidth <= 0 || windowHeight <= 0 {
+		return false
+	}
+	return x >= 0 && x < windowWidth && y >= windowHeight-bottomCommandHeight && y < windowHeight
 }
 
 func absInt(value int) int {
