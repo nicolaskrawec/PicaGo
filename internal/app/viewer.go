@@ -1238,6 +1238,7 @@ func (v *Viewer) startRotationAnimation(quarterTurns int) {
 	from := v.view.RotationAngle
 	target := ((v.view.Rotation+quarterTurns)%4 + 4) % 4
 	to := from + float64(quarterTurns)
+	v.updateCompareForRotation(quarterTurns, target, to)
 	v.view.Rotation = target
 	v.targetView.Rotation = target
 	v.view.RotationAngle = from
@@ -1246,6 +1247,65 @@ func (v *Viewer) startRotationAnimation(quarterTurns int) {
 	v.rotationAnimationTo = to
 	v.rotationAnimationStart = time.Now()
 	v.rotationAnimationActive = true
+}
+
+func (v *Viewer) updateCompareForRotation(quarterTurns, targetRotation int, targetAngle float64) {
+	if v.imageB == nil || v.mode != displayModeCompare {
+		return
+	}
+	oldOrientation := v.slider.Orientation
+	oldRect := v.currentImageRect()
+	positionRatio := 0.5
+	if oldOrientation == compare.OrientationHorizontal && oldRect.Dy() > 0 {
+		positionRatio = (v.slider.Position - float64(oldRect.Min.Y)) / float64(oldRect.Dy())
+	} else if oldOrientation == compare.OrientationVertical && oldRect.Dx() > 0 {
+		positionRatio = (v.slider.Position - float64(oldRect.Min.X)) / float64(oldRect.Dx())
+	}
+	positionRatio = clampFloat64(positionRatio, 0, 1)
+	futureView := v.view
+	futureView.Rotation = targetRotation
+	futureView.RotationAngle = targetAngle
+	futureRect := render.ImageRectForView(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, futureView)
+	oldRotation := ((v.view.Rotation % 4) + 4) % 4
+	newRotation := ((targetRotation % 4) + 4) % 4
+	oldSide := 1 // right
+	if v.slider.Orientation == compare.OrientationHorizontal {
+		if v.reverseCompare {
+			oldSide = 0 // top
+		} else {
+			oldSide = 2 // bottom
+		}
+	} else if v.reverseCompare {
+		oldSide = 3 // left
+	}
+	localSide := (oldSide - oldRotation + 4) % 4
+	newSide := (localSide + newRotation) % 4
+	switch newSide {
+	case 0: // top
+		v.slider.Orientation = compare.OrientationHorizontal
+		v.reverseCompare = true
+	case 1: // right
+		v.slider.Orientation = compare.OrientationVertical
+		v.reverseCompare = false
+	case 2: // bottom
+		v.slider.Orientation = compare.OrientationHorizontal
+		v.reverseCompare = false
+	case 3: // left
+		v.slider.Orientation = compare.OrientationVertical
+		v.reverseCompare = true
+	}
+	// A half-turn reverses the position along the split axis.
+	rotationDelta := (newRotation - oldRotation + 4) % 4
+	if rotationDelta == 2 ||
+		(rotationDelta == 1 && oldOrientation == compare.OrientationHorizontal) ||
+		(rotationDelta == 3 && oldOrientation == compare.OrientationVertical) {
+		positionRatio = 1 - positionRatio
+	}
+	if v.slider.Orientation == compare.OrientationHorizontal {
+		v.slider.Position = float64(futureRect.Min.Y) + positionRatio*float64(futureRect.Dy())
+	} else {
+		v.slider.Position = float64(futureRect.Min.X) + positionRatio*float64(futureRect.Dx())
+	}
 }
 
 func (v *Viewer) currentImageRect() stdimage.Rectangle {
