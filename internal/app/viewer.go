@@ -190,28 +190,30 @@ type Viewer struct {
 	navigationDirectory       string
 	navigationImages          []string
 	imageViewStates           map[string]render.View
+	invalidatedZoomStates     map[string]bool
 	loadingImageName          string
 	loadError                 string
 }
 
 func Run(args []string) error {
 	game := &Viewer{
-		mode:                displayModeSingleA,
-		windowWidth:         640,
-		windowHeight:        480,
-		slider:              compare.Slider{Orientation: compare.OrientationVertical},
-		circleMaskDiameter:  defaultCircleMaskDiameterRatio,
-		lastCompareBorderAt: time.Now(),
-		lastActivityAt:      time.Now(),
-		showShadow:          true,
-		syncSliderWithImage: true,
-		animateInitialFit:   true,
-		imageLoadResults:    make(chan asyncImageResult, 4),
-		prefetchResults:     make(chan prefetchedImageResult, 4),
-		prefetchInFlight:    make(map[string]bool),
-		prefetchSlots:       make(chan struct{}, 4),
-		prefetchedImages:    make(map[string]*imagedata.DecodedImage),
-		imageViewStates:     make(map[string]render.View),
+		mode:                  displayModeSingleA,
+		windowWidth:           640,
+		windowHeight:          480,
+		slider:                compare.Slider{Orientation: compare.OrientationVertical},
+		circleMaskDiameter:    defaultCircleMaskDiameterRatio,
+		lastCompareBorderAt:   time.Now(),
+		lastActivityAt:        time.Now(),
+		showShadow:            true,
+		syncSliderWithImage:   true,
+		animateInitialFit:     true,
+		imageLoadResults:      make(chan asyncImageResult, 4),
+		prefetchResults:       make(chan prefetchedImageResult, 4),
+		prefetchInFlight:      make(map[string]bool),
+		prefetchSlots:         make(chan struct{}, 4),
+		prefetchedImages:      make(map[string]*imagedata.DecodedImage),
+		imageViewStates:       make(map[string]render.View),
+		invalidatedZoomStates: make(map[string]bool),
 	}
 
 	ebiten.SetWindowResizable(true)
@@ -386,6 +388,7 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 		v.imageViewStates[imageViewStateKey(v.imageA.FilePath)] = v.targetView
 	}
 	savedView, hasSavedView := v.imageViewStates[imageViewStateKey(decoded.FilePath)]
+	hasSavedZoom := hasSavedView && savedView.Zoom > 0
 	var oldLoaded *imagedata.LoadedImage
 	var oldDecoded *imagedata.DecodedImage
 	if resetView {
@@ -410,11 +413,11 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 			v.mode = displayModeSingleA
 		}
 		v.circleMaskDiameter = defaultCircleMaskDiameterRatio
-		if activateFit && !hasSavedView {
+		if activateFit && !hasSavedZoom {
 			v.pendingResetFit = true
 			v.animateInitialFit = animateFit
 			v.skipNextFitAnimation = !animateFit
-		} else if hasSavedView {
+		} else if hasSavedZoom {
 			v.pendingResetFit = false
 			v.animateInitialFit = false
 			v.skipNextFitAnimation = false
@@ -772,7 +775,27 @@ func (v *Viewer) rememberCurrentImageView() {
 	}
 	// targetView contains the final user-requested transform while an
 	// animation is in progress, which is the state to restore later.
-	v.imageViewStates[imageViewStateKey(v.imageA.FilePath)] = v.targetView
+	key := imageViewStateKey(v.imageA.FilePath)
+	state := v.targetView
+	if v.invalidatedZoomStates[key] {
+		state.Zoom = 0
+	}
+	v.imageViewStates[key] = state
+}
+
+func (v *Viewer) invalidateSavedImageZooms() {
+	for key, state := range v.imageViewStates {
+		state.Zoom = 0
+		v.imageViewStates[key] = state
+		v.invalidatedZoomStates[key] = true
+	}
+}
+
+func (v *Viewer) markCurrentZoomChanged() {
+	if v.imageA == nil || v.imageA.FilePath == "" {
+		return
+	}
+	delete(v.invalidatedZoomStates, imageViewStateKey(v.imageA.FilePath))
 }
 
 func imageViewStateKey(path string) string {
@@ -923,6 +946,7 @@ func (v *Viewer) resetFit() {
 	if base == nil {
 		return
 	}
+	v.markCurrentZoomChanged()
 
 	fitWidth, fitHeight := base.Width, base.Height
 	if v.view.Rotation%2 != 0 {
@@ -962,6 +986,7 @@ func (v *Viewer) toggleZoom100Fit() {
 	if v.imageA == nil {
 		return
 	}
+	v.markCurrentZoomChanged()
 
 	if math.Abs(v.view.Zoom-1) < 0.001 {
 		v.resetFit()
@@ -982,6 +1007,7 @@ func (v *Viewer) restoreWindow() {
 	if !v.borderlessMaximized {
 		return
 	}
+	v.invalidateSavedImageZooms()
 
 	v.prepareSliderRestore()
 
@@ -1039,6 +1065,7 @@ func (v *Viewer) enterBorderlessMaximized() {
 	if v.borderlessMaximized {
 		return
 	}
+	v.invalidateSavedImageZooms()
 
 	v.captureWindowedState()
 	v.prepareSliderRestore()
@@ -1548,6 +1575,7 @@ func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
 	if base == nil {
 		return
 	}
+	v.markCurrentZoomChanged()
 	v.stopViewAnimation(false)
 
 	oldZoom := v.view.Zoom
