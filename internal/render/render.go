@@ -132,7 +132,11 @@ func DrawCompareCircle(screen *ebiten.Image, imageA, imageB *imagedata.LoadedIma
 	rectA := ImageRectForView(windowWidth, windowHeight, imageA.Width, imageA.Height, view)
 	imageBWidth, imageBHeight := rotatedDimensions(imageB.Width, imageB.Height, view)
 	rectB := compareRect(rectA, imageBWidth, imageBHeight)
-	radius := float64(minInt(rectA.Dx(), rectA.Dy())) * clampFloat64(diameterRatio, 0.02, 1) / 2
+	// Use the unrotated image dimensions as the reference. Using rectA here
+	// would swap its width and height at 90 degrees and make the circle grow
+	// or shrink on non-square images during rotation.
+	baseRect := ImageRect(windowWidth, windowHeight, imageA.Width, imageA.Height, view.Zoom, view.OffsetX, view.OffsetY)
+	radius := float64(minInt(baseRect.Dx(), baseRect.Dy())) * clampFloat64(diameterRatio, 0.02, 1) / 2
 	if radius <= 0 {
 		return
 	}
