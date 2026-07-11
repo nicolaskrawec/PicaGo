@@ -55,7 +55,7 @@ type asyncImageResult struct {
 }
 
 const idleFrameDelay = 500 * time.Millisecond
-const compareBorderIdleDelay = 1200 * time.Millisecond
+const compareBorderIdleDelay = 600 * time.Millisecond
 const cornerCommandTolerance = 25
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
@@ -350,6 +350,11 @@ func (v *Viewer) Update() error {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyR) {
 		v.resetFit()
+	}
+	// On AZERTY, the physical key labelled Z can be reported as KeyW by
+	// Ebiten/GLFW (the key constants follow the US layout).
+	if inpututil.IsKeyJustPressed(ebiten.KeyZ) || inpututil.IsKeyJustPressed(ebiten.KeyW) {
+		v.toggleZoom100Fit()
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
 		_ = v.loadAdjacentImage(-1)
@@ -696,7 +701,7 @@ func (v *Viewer) resetFit() {
 	}
 	if v.animateInitialFit {
 		startView := targetView
-		startView.Zoom = targetView.Zoom * 0.1
+		startView.Zoom = targetView.Zoom * 0.01
 		startView.Alpha = 0
 		v.startViewAnimation(startView, targetView, 500*time.Millisecond, 120*time.Millisecond)
 		v.animateInitialFit = false
@@ -705,6 +710,25 @@ func (v *Viewer) resetFit() {
 		v.view = targetView
 		v.targetView = targetView
 	}
+	v.ensureSliderPosition()
+}
+
+func (v *Viewer) toggleZoom100Fit() {
+	if v.imageA == nil {
+		return
+	}
+
+	if math.Abs(v.view.Zoom-1) < 0.001 {
+		v.resetFit()
+		return
+	}
+
+	v.stopViewAnimation(true)
+	v.view.Zoom = 1
+	v.view.OffsetX = 0
+	v.view.OffsetY = 0
+	v.view.Alpha = 1
+	v.targetView = v.view
 	v.ensureSliderPosition()
 }
 
@@ -1182,6 +1206,8 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 
 	return ebiten.IsKeyPressed(ebiten.KeyEscape) ||
 		ebiten.IsKeyPressed(ebiten.KeyR) ||
+		ebiten.IsKeyPressed(ebiten.KeyZ) ||
+		ebiten.IsKeyPressed(ebiten.KeyW) ||
 		ebiten.IsKeyPressed(ebiten.KeyArrowLeft) ||
 		ebiten.IsKeyPressed(ebiten.KeyArrowRight) ||
 		ebiten.IsKeyPressed(ebiten.KeyArrowUp) ||
@@ -1522,5 +1548,5 @@ func (v *Viewer) helpText() string {
 		shadowMode = "on"
 	}
 
-	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }
