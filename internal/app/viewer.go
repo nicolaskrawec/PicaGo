@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -61,12 +62,23 @@ type prefetchedImageResult struct {
 	err     error
 }
 
+type pendingHighResImage struct {
+	slot    asyncImageSlot
+	loaded  *imagedata.LoadedImage
+	decoded *imagedata.DecodedImage
+	readyAt time.Time
+}
+
 const idleFrameDelay = 500 * time.Millisecond
 const compareBorderIdleDelay = 600 * time.Millisecond
 const cornerCommandTolerance = 25
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
-const prefetchedImageCacheLimit = 6
+const prefetchedImageCacheLimit = 5
+
+// Temporary diagnostic switch: keep the screen-sized texture only so we can
+// verify whether full-resolution GPU uploads cause navigation stalls.
+const fullResolutionUploadEnabled = true
 
 var Version = "dev"
 
@@ -79,8 +91,10 @@ func windowTitle(imageName string) string {
 }
 
 type Viewer struct {
-	imageA *imagedata.LoadedImage
-	imageB *imagedata.LoadedImage
+	imageA   *imagedata.LoadedImage
+	imageB   *imagedata.LoadedImage
+	decodedA *imagedata.DecodedImage
+	decodedB *imagedata.DecodedImage
 
 	mode displayMode
 
@@ -154,8 +168,13 @@ type Viewer struct {
 	imageLoadResults         chan asyncImageResult
 	prefetchResults          chan prefetchedImageResult
 	prefetchInFlight         map[string]bool
+	prefetchSlots            chan struct{}
 	prefetchedImages         map[string]*imagedata.DecodedImage
 	prefetchOrder            []string
+	pendingHighRes           [2]*pendingHighResImage
+	initialPrefetchPending   bool
+	navigationDirectory      string
+	navigationImages         []string
 	loadingImageName         string
 	loadError                string
 }
@@ -175,6 +194,7 @@ func Run(args []string) error {
 		imageLoadResults:    make(chan asyncImageResult, 4),
 		prefetchResults:     make(chan prefetchedImageResult, 4),
 		prefetchInFlight:    make(map[string]bool),
+		prefetchSlots:       make(chan struct{}, 4),
 		prefetchedImages:    make(map[string]*imagedata.DecodedImage),
 	}
 
@@ -201,13 +221,17 @@ func Run(args []string) error {
 func (v *Viewer) startAsyncImageFileLoad(path string, slot asyncImageSlot, resetView, animateFit bool) {
 	v.nextImageLoadID++
 	id := v.nextImageLoadID
+	// A new request supersedes a preview whose full-resolution upload has not
+	// started yet. The old decode may still finish in its goroutine, but its
+	// result is already invalidated by the new request ID.
+	v.pendingHighRes[slot] = nil
 	v.trackPendingImageLoad(slot, id)
 	v.loadingImageName = filepath.Base(path)
 	v.loadError = ""
 	ebiten.SetWindowTitle(windowTitle(v.loadingImageName + " loading..."))
 
 	go func() {
-		decoded, err := imagedata.DecodeFile(path)
+		decoded, err := imagedata.DecodeFileForDisplay(path, v.previewDimension())
 		v.imageLoadResults <- asyncImageResult{
 			id:          id,
 			slot:        slot,
@@ -223,13 +247,14 @@ func (v *Viewer) startAsyncImageFileLoad(path string, slot asyncImageSlot, reset
 func (v *Viewer) startAsyncImageFSLoad(fsys fs.FS, path string, slot asyncImageSlot, resetView, animateFit bool) {
 	v.nextImageLoadID++
 	id := v.nextImageLoadID
+	v.pendingHighRes[slot] = nil
 	v.trackPendingImageLoad(slot, id)
 	v.loadingImageName = filepath.Base(path)
 	v.loadError = ""
 	ebiten.SetWindowTitle(windowTitle(v.loadingImageName + " loading..."))
 
 	go func() {
-		decoded, err := imagedata.DecodeFS(fsys, path)
+		decoded, err := imagedata.DecodeFSForDisplay(fsys, path, v.previewDimension())
 		v.imageLoadResults <- asyncImageResult{
 			id:          id,
 			slot:        slot,
@@ -262,6 +287,43 @@ func (v *Viewer) collectAsyncImageLoads() {
 	}
 }
 
+func (v *Viewer) promotePendingHighResImages() {
+	now := time.Now()
+	for i, pending := range v.pendingHighRes {
+		if pending == nil || now.Before(pending.readyAt) {
+			continue
+		}
+		// Keep the initial full-resolution upload out of the animated fit
+		// period. The preview is sufficient while the image zooms in.
+		if pending.slot == asyncImageSlotA && v.initialPrefetchPending && (v.pendingResetFit || v.viewAnimationActive) {
+			continue
+		}
+		current := v.imageA
+		if pending.slot == asyncImageSlotB {
+			current = v.imageB
+		}
+		if current == pending.loaded {
+			imagedata.UpgradeLoadedImage(pending.loaded, pending.decoded)
+		}
+		if pending.slot == asyncImageSlotA && v.initialPrefetchPending {
+			v.initialPrefetchPending = false
+			v.prefetchAdjacentImages()
+		}
+		v.pendingHighRes[i] = nil
+	}
+}
+
+func (v *Viewer) previewDimension() int {
+	dimension := v.windowWidth
+	if v.windowHeight > dimension {
+		dimension = v.windowHeight
+	}
+	if dimension < 1 {
+		return 1920
+	}
+	return dimension
+}
+
 func (v *Viewer) collectPrefetchedImages() {
 	for {
 		select {
@@ -278,6 +340,7 @@ func (v *Viewer) collectPrefetchedImages() {
 
 func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 	if !v.isCurrentImageLoad(result.slot, result.id) {
+		result.decoded.Release()
 		return
 	}
 	v.trackPendingImageLoad(result.slot, 0)
@@ -293,7 +356,7 @@ func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 }
 
 func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.DecodedImage, resetView, animateFit, activateFit bool) {
-	loaded := imagedata.NewLoadedImage(decoded)
+	loaded := imagedata.NewLoadedPreviewImage(decoded)
 	if loaded == nil {
 		v.loadError = "image load failed"
 		ebiten.SetWindowTitle(windowTitle("load failed"))
@@ -301,6 +364,10 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 	}
 
 	v.loadError = ""
+	v.pendingHighRes[slot] = nil
+	v.initialPrefetchPending = false
+	var oldLoaded *imagedata.LoadedImage
+	var oldDecoded *imagedata.DecodedImage
 	if resetView {
 		v.view = render.View{}
 		v.targetView = v.view
@@ -309,7 +376,10 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 
 	switch slot {
 	case asyncImageSlotA:
+		oldLoaded = v.imageA
+		oldDecoded = v.decodedA
 		v.imageA = loaded
+		v.decodedA = decoded
 		if v.imageB == nil {
 			v.mode = displayModeSingleA
 		}
@@ -319,10 +389,30 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 			v.animateInitialFit = animateFit
 		}
 	case asyncImageSlotB:
+		oldLoaded = v.imageB
+		oldDecoded = v.decodedB
 		v.imageB = loaded
+		v.decodedB = decoded
 		if v.imageA != nil {
 			v.mode = displayModeCompare
 		}
+	}
+	oldLoaded.Release()
+	if slot == asyncImageSlotA && oldDecoded != nil && oldLoaded != nil {
+		// The image that was displayed becomes the new -1 entry.
+		v.cachePrefetchedImage(oldLoaded.FilePath, oldDecoded)
+	} else if oldDecoded != nil {
+		oldDecoded.Release()
+	}
+	if fullResolutionUploadEnabled {
+		// Give the preview a few frames to reach the screen before starting the
+		// potentially expensive full-resolution GPU upload.
+		v.pendingHighRes[slot] = &pendingHighResImage{
+			slot: slot, loaded: loaded, decoded: decoded, readyAt: time.Now().Add(250 * time.Millisecond),
+		}
+	}
+	if slot == asyncImageSlotA && animateFit {
+		v.initialPrefetchPending = true
 	}
 
 	v.draggingImage = false
@@ -330,7 +420,9 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 	v.leftMouseDown = false
 	v.restoreClickPending = false
 	ebiten.SetWindowTitle(windowTitle(loaded.FileName))
-	v.prefetchAdjacentImages()
+	if !(slot == asyncImageSlotA && animateFit) {
+		v.prefetchAdjacentImages()
+	}
 }
 
 func (v *Viewer) isCurrentImageLoad(slot asyncImageSlot, id int) bool {
@@ -347,6 +439,7 @@ func (v *Viewer) isCurrentImageLoad(slot asyncImageSlot, id int) bool {
 func (v *Viewer) Update() error {
 	now := time.Now()
 	v.collectAsyncImageLoads()
+	v.promotePendingHighResImages()
 	v.collectPrefetchedImages()
 
 	if v.pendingInitialBorderless {
@@ -971,7 +1064,7 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 		return nil
 	}
 
-	images, currentIndex, err := imagePathsInDirectory(v.imageA.FilePath)
+	images, currentIndex, err := v.navigationImagePaths(v.imageA.FilePath)
 	if err != nil {
 		return err
 	}
@@ -995,27 +1088,34 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 	return nil
 }
 
-func imagePathsInDirectory(filePath string) ([]string, int, error) {
+func (v *Viewer) navigationImagePaths(filePath string) ([]string, int, error) {
 	dir := filepath.Dir(filePath)
 	currentName := filepath.Base(filePath)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, -1, err
+
+	if v.navigationDirectory == "" || v.navigationDirectory != dir {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, -1, err
+		}
+
+		images := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			if entry.IsDir() || !imagedata.IsSupportedFile(entry.Name()) {
+				continue
+			}
+			images = append(images, filepath.Join(dir, entry.Name()))
+		}
+		v.navigationDirectory = dir
+		v.navigationImages = images
 	}
 
-	images := make([]string, 0, len(entries))
 	currentIndex := -1
-	for _, entry := range entries {
-		if entry.IsDir() || !imagedata.IsSupportedFile(entry.Name()) {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
-		images = append(images, path)
-		if entry.Name() == currentName {
-			currentIndex = len(images) - 1
+	for index, path := range v.navigationImages {
+		if filepath.Base(path) == currentName {
+			currentIndex = index
 		}
 	}
-	return images, currentIndex, nil
+	return v.navigationImages, currentIndex, nil
 }
 
 func (v *Viewer) prefetchAdjacentImages() {
@@ -1023,16 +1123,30 @@ func (v *Viewer) prefetchAdjacentImages() {
 		return
 	}
 
-	images, currentIndex, err := imagePathsInDirectory(v.imageA.FilePath)
+	images, currentIndex, err := v.navigationImagePaths(v.imageA.FilePath)
 	if err != nil || currentIndex < 0 {
 		return
 	}
 
-	for _, offset := range []int{-1, 1, -2, 2} {
+	wanted := make(map[string]bool, prefetchedImageCacheLimit)
+	for _, offset := range []int{-2, -1, 1, 2, 3} {
 		index := currentIndex + offset
 		if index >= 0 && index < len(images) {
-			v.startPrefetch(images[index])
+			wanted[images[index]] = true
 		}
+	}
+
+	// Drop entries that belonged to the previous position before inserting
+	// new ones. This prevents FIFO eviction from removing the new previous or
+	// next image while stale entries are still in the cache.
+	for _, path := range append([]string(nil), v.prefetchOrder...) {
+		if !wanted[path] {
+			v.removePrefetchedImage(path)
+		}
+	}
+
+	for path := range wanted {
+		v.startPrefetch(path)
 	}
 }
 
@@ -1042,22 +1156,61 @@ func (v *Viewer) startPrefetch(path string) {
 	}
 	v.prefetchInFlight[path] = true
 	go func() {
-		decoded, err := imagedata.DecodeFile(path)
+		v.prefetchSlots <- struct{}{}
+		decoded, err := imagedata.DecodeFileForDisplay(path, 1920)
+		<-v.prefetchSlots
 		v.prefetchResults <- prefetchedImageResult{path: path, decoded: decoded, err: err}
 	}()
 }
 
 func (v *Viewer) cachePrefetchedImage(path string, decoded *imagedata.DecodedImage) {
+	if !v.isWantedPrefetchPath(path) {
+		decoded.Release()
+		return
+	}
 	if _, exists := v.prefetchedImages[path]; exists {
+		decoded.Release()
 		return
 	}
 	if len(v.prefetchOrder) >= prefetchedImageCacheLimit {
 		oldest := v.prefetchOrder[0]
 		v.prefetchOrder = v.prefetchOrder[1:]
+		v.prefetchedImages[oldest].Release()
 		delete(v.prefetchedImages, oldest)
 	}
 	v.prefetchedImages[path] = decoded
 	v.prefetchOrder = append(v.prefetchOrder, path)
+}
+
+func (v *Viewer) isWantedPrefetchPath(path string) bool {
+	if v.imageA == nil || v.imageA.FilePath == "" {
+		return false
+	}
+	images, currentIndex, err := v.navigationImagePaths(v.imageA.FilePath)
+	if err != nil || currentIndex < 0 {
+		return false
+	}
+	for _, offset := range []int{-2, -1, 1, 2, 3} {
+		index := currentIndex + offset
+		if index >= 0 && index < len(images) && images[index] == path {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *Viewer) removePrefetchedImage(path string) {
+	decoded := v.prefetchedImages[path]
+	if decoded != nil {
+		decoded.Release()
+		delete(v.prefetchedImages, path)
+	}
+	for i, cachedPath := range v.prefetchOrder {
+		if cachedPath == path {
+			v.prefetchOrder = append(v.prefetchOrder[:i], v.prefetchOrder[i+1:]...)
+			break
+		}
+	}
 }
 
 func (v *Viewer) takePrefetchedImage(path string) *imagedata.DecodedImage {
@@ -1683,12 +1836,22 @@ func (v *Viewer) helpText() string {
 		blurMode = "on"
 	}
 
-	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nMémoire : " + v.memoryStatusText() + "\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+}
+
+func (v *Viewer) memoryStatusText() string {
+	var stats runtime.MemStats
+	runtime.ReadMemStats(&stats)
+	toMiB := func(value uint64) string {
+		return strconv.FormatUint(value/(1024*1024), 10) + " MiB"
+	}
+	return "alloc " + toMiB(stats.Alloc) + " / heap " + toMiB(stats.HeapInuse) + " / sys " + toMiB(stats.Sys) +
+		" / cache " + strconv.Itoa(len(v.prefetchedImages)) + " / actifs " + strconv.Itoa(len(v.prefetchInFlight))
 }
 
 func (v *Viewer) prefetchStatusText() string {
 	if v.imageA != nil && v.imageA.FilePath != "" {
-		if paths, _, err := imagePathsInDirectory(v.imageA.FilePath); err == nil {
+		if paths, _, err := v.navigationImagePaths(v.imageA.FilePath); err == nil {
 			status := make([]string, 0, len(paths))
 			for _, path := range paths {
 				switch {
