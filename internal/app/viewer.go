@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -54,11 +55,18 @@ type asyncImageResult struct {
 	activateFit bool
 }
 
+type prefetchedImageResult struct {
+	path    string
+	decoded *imagedata.DecodedImage
+	err     error
+}
+
 const idleFrameDelay = 500 * time.Millisecond
 const compareBorderIdleDelay = 600 * time.Millisecond
 const cornerCommandTolerance = 25
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
+const prefetchedImageCacheLimit = 6
 
 var Version = "dev"
 
@@ -144,6 +152,10 @@ type Viewer struct {
 	pendingImageLoadAID      int
 	pendingImageLoadBID      int
 	imageLoadResults         chan asyncImageResult
+	prefetchResults          chan prefetchedImageResult
+	prefetchInFlight         map[string]bool
+	prefetchedImages         map[string]*imagedata.DecodedImage
+	prefetchOrder            []string
 	loadingImageName         string
 	loadError                string
 }
@@ -161,6 +173,9 @@ func Run(args []string) error {
 		syncSliderWithImage: true,
 		animateInitialFit:   true,
 		imageLoadResults:    make(chan asyncImageResult, 4),
+		prefetchResults:     make(chan prefetchedImageResult, 4),
+		prefetchInFlight:    make(map[string]bool),
+		prefetchedImages:    make(map[string]*imagedata.DecodedImage),
 	}
 
 	ebiten.SetWindowResizable(true)
@@ -247,6 +262,20 @@ func (v *Viewer) collectAsyncImageLoads() {
 	}
 }
 
+func (v *Viewer) collectPrefetchedImages() {
+	for {
+		select {
+		case result := <-v.prefetchResults:
+			delete(v.prefetchInFlight, result.path)
+			if result.err == nil && result.decoded != nil {
+				v.cachePrefetchedImage(result.path, result.decoded)
+			}
+		default:
+			return
+		}
+	}
+}
+
 func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 	if !v.isCurrentImageLoad(result.slot, result.id) {
 		return
@@ -260,7 +289,11 @@ func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 		return
 	}
 
-	loaded := imagedata.NewLoadedImage(result.decoded)
+	v.applyDecodedImage(result.slot, result.decoded, result.resetView, result.animateFit, result.activateFit)
+}
+
+func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.DecodedImage, resetView, animateFit, activateFit bool) {
+	loaded := imagedata.NewLoadedImage(decoded)
 	if loaded == nil {
 		v.loadError = "image load failed"
 		ebiten.SetWindowTitle(windowTitle("load failed"))
@@ -268,22 +301,22 @@ func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 	}
 
 	v.loadError = ""
-	if result.resetView {
+	if resetView {
 		v.view = render.View{}
 		v.targetView = v.view
 		v.stopViewAnimation(false)
 	}
 
-	switch result.slot {
+	switch slot {
 	case asyncImageSlotA:
 		v.imageA = loaded
 		if v.imageB == nil {
 			v.mode = displayModeSingleA
 		}
 		v.circleMaskDiameter = defaultCircleMaskDiameterRatio
-		if result.activateFit {
+		if activateFit {
 			v.pendingResetFit = true
-			v.animateInitialFit = result.animateFit
+			v.animateInitialFit = animateFit
 		}
 	case asyncImageSlotB:
 		v.imageB = loaded
@@ -297,6 +330,7 @@ func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 	v.leftMouseDown = false
 	v.restoreClickPending = false
 	ebiten.SetWindowTitle(windowTitle(loaded.FileName))
+	v.prefetchAdjacentImages()
 }
 
 func (v *Viewer) isCurrentImageLoad(slot asyncImageSlot, id int) bool {
@@ -313,6 +347,7 @@ func (v *Viewer) isCurrentImageLoad(slot asyncImageSlot, id int) bool {
 func (v *Viewer) Update() error {
 	now := time.Now()
 	v.collectAsyncImageLoads()
+	v.collectPrefetchedImages()
 
 	if v.pendingInitialBorderless {
 		v.enterFromNativeMaximize = false
@@ -936,12 +971,36 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 		return nil
 	}
 
-	dir := filepath.Dir(v.imageA.FilePath)
-	currentName := filepath.Base(v.imageA.FilePath)
-
-	entries, err := os.ReadDir(dir)
+	images, currentIndex, err := imagePathsInDirectory(v.imageA.FilePath)
 	if err != nil {
 		return err
+	}
+
+	nextIndex := currentIndex + step
+	if currentIndex < 0 || nextIndex < 0 || nextIndex >= len(images) {
+		return nil
+	}
+
+	nextPath := images[nextIndex]
+	if decoded := v.takePrefetchedImage(nextPath); decoded != nil {
+		// Invalidate an older asynchronous navigation result before applying
+		// the cached image immediately.
+		v.trackPendingImageLoad(asyncImageSlotA, 0)
+		v.loadingImageName = ""
+		v.applyDecodedImage(asyncImageSlotA, decoded, true, false, true)
+		return nil
+	}
+
+	v.startAsyncImageFileLoad(nextPath, asyncImageSlotA, true, false)
+	return nil
+}
+
+func imagePathsInDirectory(filePath string) ([]string, int, error) {
+	dir := filepath.Dir(filePath)
+	currentName := filepath.Base(filePath)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, -1, err
 	}
 
 	images := make([]string, 0, len(entries))
@@ -950,19 +1009,70 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 		if entry.IsDir() || !imagedata.IsSupportedFile(entry.Name()) {
 			continue
 		}
-		images = append(images, entry.Name())
+		path := filepath.Join(dir, entry.Name())
+		images = append(images, path)
 		if entry.Name() == currentName {
 			currentIndex = len(images) - 1
 		}
 	}
+	return images, currentIndex, nil
+}
 
-	nextIndex := currentIndex + step
-	if currentIndex < 0 || nextIndex < 0 || nextIndex >= len(images) {
-		return nil
+func (v *Viewer) prefetchAdjacentImages() {
+	if v.imageA == nil || v.imageA.FilePath == "" {
+		return
 	}
 
-	v.startAsyncImageFileLoad(filepath.Join(dir, images[nextIndex]), asyncImageSlotA, true, false)
-	return nil
+	images, currentIndex, err := imagePathsInDirectory(v.imageA.FilePath)
+	if err != nil || currentIndex < 0 {
+		return
+	}
+
+	for _, offset := range []int{-1, 1, -2, 2} {
+		index := currentIndex + offset
+		if index >= 0 && index < len(images) {
+			v.startPrefetch(images[index])
+		}
+	}
+}
+
+func (v *Viewer) startPrefetch(path string) {
+	if _, ok := v.prefetchedImages[path]; ok || v.prefetchInFlight[path] {
+		return
+	}
+	v.prefetchInFlight[path] = true
+	go func() {
+		decoded, err := imagedata.DecodeFile(path)
+		v.prefetchResults <- prefetchedImageResult{path: path, decoded: decoded, err: err}
+	}()
+}
+
+func (v *Viewer) cachePrefetchedImage(path string, decoded *imagedata.DecodedImage) {
+	if _, exists := v.prefetchedImages[path]; exists {
+		return
+	}
+	if len(v.prefetchOrder) >= prefetchedImageCacheLimit {
+		oldest := v.prefetchOrder[0]
+		v.prefetchOrder = v.prefetchOrder[1:]
+		delete(v.prefetchedImages, oldest)
+	}
+	v.prefetchedImages[path] = decoded
+	v.prefetchOrder = append(v.prefetchOrder, path)
+}
+
+func (v *Viewer) takePrefetchedImage(path string) *imagedata.DecodedImage {
+	decoded := v.prefetchedImages[path]
+	if decoded == nil {
+		return nil
+	}
+	delete(v.prefetchedImages, path)
+	for i, cachedPath := range v.prefetchOrder {
+		if cachedPath == path {
+			v.prefetchOrder = append(v.prefetchOrder[:i], v.prefetchOrder[i+1:]...)
+			break
+		}
+	}
+	return decoded
 }
 
 func pointInRect(x, y int, rect stdimage.Rectangle) bool {
@@ -1191,6 +1301,10 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 	}
 
 	if v.pendingImageLoadAID != 0 || v.pendingImageLoadBID != 0 {
+		return true
+	}
+
+	if len(v.prefetchInFlight) > 0 {
 		return true
 	}
 
@@ -1569,5 +1683,38 @@ func (v *Viewer) helpText() string {
 		blurMode = "on"
 	}
 
-	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nM : miroir\nMolette : zoom image\nShift+molette : zoom masque cercle\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+}
+
+func (v *Viewer) prefetchStatusText() string {
+	if v.imageA != nil && v.imageA.FilePath != "" {
+		if paths, _, err := imagePathsInDirectory(v.imageA.FilePath); err == nil {
+			status := make([]string, 0, len(paths))
+			for _, path := range paths {
+				switch {
+				case path == v.imageA.FilePath:
+					status = append(status, "["+filepath.Base(path)+"]")
+				case v.prefetchedImages[path] != nil:
+					status = append(status, filepath.Base(path))
+				}
+			}
+			if len(status) > 0 {
+				return strings.Join(status, " ")
+			}
+		}
+	}
+
+	status := make([]string, 0, len(v.prefetchOrder)+1)
+	if v.imageA != nil && v.imageA.FileName != "" {
+		status = append(status, "["+v.imageA.FileName+"]")
+	}
+	for _, path := range v.prefetchOrder {
+		if _, ok := v.prefetchedImages[path]; ok {
+			status = append(status, filepath.Base(path))
+		}
+	}
+	if len(status) == 0 {
+		return "vide"
+	}
+	return strings.Join(status, " ")
 }
