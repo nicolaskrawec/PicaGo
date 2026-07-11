@@ -1294,13 +1294,18 @@ func (v *Viewer) updateCompareForRotation(quarterTurns, targetRotation int, targ
 		v.slider.Orientation = compare.OrientationVertical
 		v.reverseCompare = true
 	}
-	// A half-turn reverses the position along the split axis.
-	rotationDelta := (newRotation - oldRotation + 4) % 4
-	if rotationDelta == 2 ||
-		(rotationDelta == 1 && oldOrientation == compare.OrientationHorizontal) ||
-		(rotationDelta == 3 && oldOrientation == compare.OrientationVertical) {
+	// Preserve the distance from B's side of the split. Comparing the sides
+	// directly is less error-prone than deriving this from the rotation sign:
+	// for example, right -> bottom keeps the ratio, while right -> top and
+	// right -> left must invert it.
+	oldMaxSide := oldSide == 1 || oldSide == 2 // right or bottom
+	newMaxSide := newSide == 1 || newSide == 2 // right or bottom
+	if oldMaxSide != newMaxSide {
 		positionRatio = 1 - positionRatio
 	}
+	// The regular viewport synchronization runs every frame and would
+	// otherwise restore the ratio captured before the rotation.
+	v.sliderSyncRatio = positionRatio
 	if v.slider.Orientation == compare.OrientationHorizontal {
 		v.slider.Position = float64(futureRect.Min.Y) + positionRatio*float64(futureRect.Dy())
 	} else {
