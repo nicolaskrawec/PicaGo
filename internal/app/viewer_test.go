@@ -156,3 +156,26 @@ func TestSoloPreviewHandlesBothKeysAndMissingImageB(t *testing.T) {
 		t.Fatalf("release after both keys: mode=%v, want compare", v.mode)
 	}
 }
+
+func TestImageDropSlotUsesWindowCenter(t *testing.T) {
+	v := Viewer{windowWidth: 1000}
+	if got := v.imageDropSlot(999); got != asyncImageSlotA {
+		t.Fatalf("drop without image A targets slot %v, want A", got)
+	}
+
+	v.imageA = &imagedata.LoadedImage{}
+	tests := []struct {
+		x    int
+		want asyncImageSlot
+	}{
+		{0, asyncImageSlotA},
+		{499, asyncImageSlotA},
+		{500, asyncImageSlotB},
+		{999, asyncImageSlotB},
+	}
+	for _, test := range tests {
+		if got := v.imageDropSlot(test.x); got != test.want {
+			t.Errorf("drop at x=%d targets slot %v, want %v", test.x, got, test.want)
+		}
+	}
+}

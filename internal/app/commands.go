@@ -37,6 +37,9 @@ func (v *Viewer) Update() error {
 	}
 
 	if dropped := ebiten.DroppedFiles(); dropped != nil {
+		mouseX, _ := ebiten.CursorPosition()
+		dropSlot := v.imageDropSlot(mouseX)
+		animateImageA := v.imageA == nil
 		var droppedImages []string
 		var firstDroppedImage string
 		_ = fs.WalkDir(dropped, ".", func(path string, d fs.DirEntry, err error) error {
@@ -61,11 +64,11 @@ func (v *Viewer) Update() error {
 		})
 
 		if len(droppedImages) >= 2 {
-			v.startAsyncImageFSLoad(dropped, droppedImages[0], asyncImageSlotA, true, true)
+			v.startAsyncImageFSLoad(dropped, droppedImages[0], asyncImageSlotA, true, animateImageA)
 			v.startAsyncImageFSLoad(dropped, droppedImages[1], asyncImageSlotB, false, false)
 		} else if firstDroppedImage != "" {
-			if v.imageA == nil {
-				v.startAsyncImageFSLoad(dropped, firstDroppedImage, asyncImageSlotA, true, true)
+			if dropSlot == asyncImageSlotA {
+				v.startAsyncImageFSLoad(dropped, firstDroppedImage, asyncImageSlotA, true, animateImageA)
 			} else {
 				v.startAsyncImageFSLoad(dropped, firstDroppedImage, asyncImageSlotB, false, false)
 			}
@@ -80,8 +83,8 @@ func (v *Viewer) Update() error {
 					return nil
 				}
 				if imagedata.IsSupportedFile(path) {
-					if v.imageA == nil {
-						v.startAsyncImageFSLoad(dropped, path, asyncImageSlotA, true, true)
+					if dropSlot == asyncImageSlotA {
+						v.startAsyncImageFSLoad(dropped, path, asyncImageSlotA, true, animateImageA)
 					} else {
 						v.startAsyncImageFSLoad(dropped, path, asyncImageSlotB, false, false)
 					}
@@ -349,6 +352,15 @@ func (v *Viewer) Update() error {
 	v.updateFramePacing(now, v.shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed))
 
 	return nil
+}
+
+// imageDropSlot divides the window vertically through its center. Until A is
+// loaded, the whole window remains a drop target for A.
+func (v *Viewer) imageDropSlot(mouseX int) asyncImageSlot {
+	if v.imageA == nil || v.windowWidth <= 0 || mouseX < v.windowWidth/2 {
+		return asyncImageSlotA
+	}
+	return asyncImageSlotB
 }
 
 func (v *Viewer) updateSoloPreview(showA, showB bool) {
