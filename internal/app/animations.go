@@ -96,6 +96,7 @@ func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
 	if base == nil {
 		return
 	}
+	v.fitMode = false
 	v.markCurrentZoomChanged()
 	v.stopViewAnimation(false)
 

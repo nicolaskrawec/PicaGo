@@ -16,6 +16,7 @@ func (v *Viewer) resetFit() {
 	if base == nil {
 		return
 	}
+	v.fitMode = true
 	v.markCurrentZoomChanged()
 
 	fitWidth, fitHeight := base.Width, base.Height
@@ -68,6 +69,7 @@ func (v *Viewer) toggleZoom100Fit() {
 	targetView.OffsetX = 0
 	targetView.OffsetY = 0
 	targetView.Alpha = 1
+	v.fitMode = false
 	v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
 	v.targetView = targetView
 	v.ensureSliderPosition()
@@ -202,6 +204,11 @@ func (v *Viewer) prepareViewportRebase() {
 
 func (v *Viewer) rebaseViewportForResize(newWidth, newHeight int) {
 	if !v.pendingViewportRebase || newWidth <= 0 || newHeight <= 0 || v.viewportBaseWidth <= 0 || v.viewportBaseHeight <= 0 {
+		return
+	}
+	if v.fitMode {
+		v.pendingResetFit = true
+		v.pendingViewportRebase = false
 		return
 	}
 

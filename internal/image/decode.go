@@ -125,11 +125,13 @@ func decodeFromReader(reader io.Reader, fileName, filePath string, maxDimension 
 
 	bounds := decoded.Bounds()
 	result := &DecodedImage{
-		FileName:        fileName,
-		FilePath:        filePath,
-		Width:           bounds.Dx(),
-		Height:          bounds.Dy(),
-		HasTransparency: hasTransparency(decoded),
+		FileName: fileName,
+		FilePath: filePath,
+		Width:    bounds.Dx(),
+		Height:   bounds.Dy(),
+		// Alpha detection requires a full pixel-by-pixel pass. Keep it disabled
+		// so decoding large images does not trigger a second full image scan.
+		HasTransparency: false,
 		Image:           decoded,
 	}
 	if maxDimension > 0 {
@@ -153,23 +155,6 @@ func makePreview(source stddraw.Image, maxDimension int) stddraw.Image {
 	preview := stddraw.NewRGBA(stddraw.Rect(0, 0, width, height))
 	xdraw.ApproxBiLinear.Scale(preview, preview.Bounds(), source, bounds, xdraw.Src, nil)
 	return preview
-}
-
-func hasTransparency(source stddraw.Image) bool {
-	switch source.(type) {
-	case *stddraw.Gray, *stddraw.Gray16, *stddraw.YCbCr:
-		return false
-	}
-	bounds := source.Bounds()
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			_, _, _, alpha := source.At(x, y).RGBA()
-			if alpha < 0xffff {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func NewLoadedImage(decoded *DecodedImage) *LoadedImage {

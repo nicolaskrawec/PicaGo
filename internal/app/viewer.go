@@ -99,6 +99,7 @@ type Viewer struct {
 
 	view       render.View
 	targetView render.View
+	fitMode    bool
 
 	draggingImage           bool
 	draggingSlider          bool
@@ -244,7 +245,20 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	// restored relative to the image after the resize.
 	if newWidth != v.windowWidth || newHeight != v.windowHeight {
 		v.prepareSliderRestore()
+		if v.fitMode {
+			// A resize should settle on the new fit immediately instead of
+			// animating the zoom again. Do not affect the initial image fit,
+			// which may intentionally animate when the first frame is displayed.
+			if v.imageA != nil && v.windowWidth > 0 && v.windowHeight > 0 {
+				v.skipNextFitAnimation = true
+			}
+			v.pendingResetFit = true
+			v.pendingViewportRebase = false
+		}
 	}
+	// Consume a prepared viewport rebase even when the backbuffer size has
+	// not changed yet; the fullscreen transition can be applied between Draw
+	// calls.
 	v.rebaseViewportForResize(newWidth, newHeight)
 	v.windowWidth, v.windowHeight = newWidth, newHeight
 	showShadow := v.showShadow

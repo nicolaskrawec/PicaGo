@@ -268,6 +268,9 @@ func (v *Viewer) Update() error {
 		} else if v.draggingImage {
 			dx := mouseX - v.lastMouseX
 			dy := mouseY - v.lastMouseY
+			if dx != 0 || dy != 0 {
+				v.fitMode = false
+			}
 			v.view.OffsetX += float64(dx)
 			v.view.OffsetY += float64(dy)
 			v.targetView.OffsetX += float64(dx)

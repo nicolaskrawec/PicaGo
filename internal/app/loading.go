@@ -194,10 +194,12 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 		}
 		v.circleMaskDiameter = defaultCircleMaskDiameterRatio
 		if activateFit && !hasSavedZoom {
+			v.fitMode = true
 			v.pendingResetFit = true
 			v.animateInitialFit = animateFit
 			v.skipNextFitAnimation = !animateFit
 		} else if hasSavedZoom {
+			v.fitMode = false
 			v.pendingResetFit = false
 			v.animateInitialFit = false
 			v.skipNextFitAnimation = false
