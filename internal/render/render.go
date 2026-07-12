@@ -91,8 +91,7 @@ func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, wi
 	}
 
 	rectA := ImageRectForView(windowWidth, windowHeight, imageA.Width, imageA.Height, view)
-	imageBWidth, imageBHeight := rotatedDimensions(imageB.Width, imageB.Height, view)
-	rectB := compareRect(rectA, imageBWidth, imageBHeight)
+	rectB := compareRectForView(rectA, imageA.Width, imageA.Height, imageB.Width, imageB.Height, view)
 	// Once rotated, clipping in B's local coordinates makes the mask boundary
 	// depend on B's aspect ratio. Clip the already transformed B quad against
 	// the exact screen-space slider line instead, so mask and line coincide.
@@ -160,8 +159,7 @@ func DrawCompareRotating(screen *ebiten.Image, imageA, imageB *imagedata.LoadedI
 	}
 	ratio = clampFloat64(ratio, 0, 1)
 	rectA := ImageRectForView(windowWidth, windowHeight, imageA.Width, imageA.Height, view)
-	imageBWidth, imageBHeight := rotatedDimensions(imageB.Width, imageB.Height, view)
-	rectB := compareRect(rectA, imageBWidth, imageBHeight)
+	rectB := compareRectForView(rectA, imageA.Width, imageA.Height, imageB.Width, imageB.Height, view)
 	u0, v0, u1, v1 := ratio, 0.0, ratio, 1.0
 	keepU, keepV := .5, .5
 	if localSide == 0 || localSide == 2 {
@@ -267,8 +265,7 @@ func DrawCompareCircle(screen *ebiten.Image, imageA, imageB *imagedata.LoadedIma
 	}
 
 	rectA := ImageRectForView(windowWidth, windowHeight, imageA.Width, imageA.Height, view)
-	imageBWidth, imageBHeight := rotatedDimensions(imageB.Width, imageB.Height, view)
-	rectB := compareRect(rectA, imageBWidth, imageBHeight)
+	rectB := compareRectForView(rectA, imageA.Width, imageA.Height, imageB.Width, imageB.Height, view)
 	// Use the unrotated image dimensions as the reference. Using rectA here
 	// would swap its width and height at 90 degrees and make the circle grow
 	// or shrink on non-square images during rotation.
@@ -299,17 +296,25 @@ func DrawCompareCircle(screen *ebiten.Image, imageA, imageB *imagedata.LoadedIma
 	}
 }
 
-func compareRect(baseRect stdimage.Rectangle, imageWidth, imageHeight int) stdimage.Rectangle {
-	scale := math.Min(float64(baseRect.Dx())/float64(imageWidth), float64(baseRect.Dy())/float64(imageHeight))
-	drawWidth := float64(imageWidth) * scale
-	drawHeight := float64(imageHeight) * scale
-	left := float64(baseRect.Min.X) + (float64(baseRect.Dx())-drawWidth)/2
-	top := float64(baseRect.Min.Y) + (float64(baseRect.Dy())-drawHeight)/2
+// compareRectForView chooses B's fit scale before applying the rotation. If
+// the fit were recomputed from the two animated bounding boxes, images with
+// different aspect ratios would acquire a temporary zoom between quarter
+// turns. Keeping this scale constant makes B rotate rigidly like A.
+func compareRectForView(rectA stdimage.Rectangle, imageAWidth, imageAHeight, imageBWidth, imageBHeight int, view View) stdimage.Rectangle {
+	if imageAWidth <= 0 || imageAHeight <= 0 || imageBWidth <= 0 || imageBHeight <= 0 {
+		return stdimage.Rectangle{}
+	}
+	fitScale := view.Zoom * math.Min(float64(imageAWidth)/float64(imageBWidth), float64(imageAHeight)/float64(imageBHeight))
+	angle := view.RotationAngle * math.Pi / 2
+	rotatedWidth := (float64(imageBWidth)*math.Abs(math.Cos(angle)) + float64(imageBHeight)*math.Abs(math.Sin(angle))) * fitScale
+	rotatedHeight := (float64(imageBWidth)*math.Abs(math.Sin(angle)) + float64(imageBHeight)*math.Abs(math.Cos(angle))) * fitScale
+	cx := float64(rectA.Min.X+rectA.Max.X) / 2
+	cy := float64(rectA.Min.Y+rectA.Max.Y) / 2
 	return stdimage.Rect(
-		int(math.Round(left)),
-		int(math.Round(top)),
-		int(math.Round(left+drawWidth)),
-		int(math.Round(top+drawHeight)),
+		int(math.Round(cx-rotatedWidth/2)),
+		int(math.Round(cy-rotatedHeight/2)),
+		int(math.Round(cx+rotatedWidth/2)),
+		int(math.Round(cy+rotatedHeight/2)),
 	)
 }
 
