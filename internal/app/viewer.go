@@ -62,6 +62,7 @@ type pendingHighResImage struct {
 }
 
 const idleFrameDelay = 500 * time.Millisecond
+const targetTPS = 120
 const compareBorderIdleDelay = 600 * time.Millisecond
 const cornerCommandTolerance = 25
 const bottomCommandHeight = 40
@@ -219,6 +220,7 @@ func Run(args []string) error {
 	}
 
 	ebiten.SetWindowResizable(true)
+	ebiten.SetTPS(targetTPS)
 	ebiten.SetWindowTitle(windowTitle(""))
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowIcon(assets.WindowIcons())
