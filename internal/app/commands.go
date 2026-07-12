@@ -340,15 +340,40 @@ func (v *Viewer) Update() error {
 
 	v.updateCompareGuideVisibility(now, mouseX, mouseY, imageRect, imageReady)
 
-	if ebiten.IsKeyPressed(ebiten.Key1) {
-		v.mode = displayModeSingleA
-	}
-	if ebiten.IsKeyPressed(ebiten.Key2) && v.imageB != nil {
-		v.mode = displayModeSingleB
-	}
+	v.updateSoloPreview(ebiten.IsKeyPressed(ebiten.Key1), ebiten.IsKeyPressed(ebiten.Key2))
 
 	v.updateCursorShape(mouseX, mouseY, imageRect, imageReady)
 	v.updateFramePacing(now, v.shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed))
 
 	return nil
+}
+
+func (v *Viewer) updateSoloPreview(showA, showB bool) {
+	// If both keys are held, B wins consistently with the previous sequential
+	// handling. A missing B must not start a preview that cannot be displayed.
+	requestedMode := displayModeSingleA
+	hasRequest := showA
+	if showB && v.imageB != nil {
+		requestedMode = displayModeSingleB
+		hasRequest = true
+	}
+	if hasRequest {
+		if !v.soloPreviewActive {
+			v.modeBeforeSoloPreview = v.mode
+			v.soloPreviewActive = true
+		}
+		v.mode = requestedMode
+		return
+	}
+	if !v.soloPreviewActive {
+		return
+	}
+	v.mode = v.modeBeforeSoloPreview
+	if v.mode == displayModeSingleB && v.imageB == nil {
+		v.mode = displayModeSingleA
+	}
+	if v.mode == displayModeCompare && (v.imageA == nil || v.imageB == nil) {
+		v.mode = displayModeSingleA
+	}
+	v.soloPreviewActive = false
 }

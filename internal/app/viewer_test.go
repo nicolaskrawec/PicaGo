@@ -112,3 +112,47 @@ func TestScreenMirrorSwapsAxesAfterQuarterTurn(t *testing.T) {
 		}
 	}
 }
+
+func TestSoloPreviewRestoresPreviousModeOnRelease(t *testing.T) {
+	v := Viewer{
+		imageA: &imagedata.LoadedImage{},
+		imageB: &imagedata.LoadedImage{},
+		mode:   displayModeCompare,
+	}
+
+	v.updateSoloPreview(true, false)
+	if v.mode != displayModeSingleA || !v.soloPreviewActive {
+		t.Fatalf("holding 1: mode=%v active=%v", v.mode, v.soloPreviewActive)
+	}
+	v.updateSoloPreview(false, false)
+	if v.mode != displayModeCompare || v.soloPreviewActive {
+		t.Fatalf("releasing 1: mode=%v active=%v, want compare and inactive", v.mode, v.soloPreviewActive)
+	}
+
+	v.updateSoloPreview(false, true)
+	if v.mode != displayModeSingleB {
+		t.Fatalf("holding 2: mode=%v, want single B", v.mode)
+	}
+	v.updateSoloPreview(false, false)
+	if v.mode != displayModeCompare {
+		t.Fatalf("releasing 2: mode=%v, want compare", v.mode)
+	}
+}
+
+func TestSoloPreviewHandlesBothKeysAndMissingImageB(t *testing.T) {
+	v := Viewer{imageA: &imagedata.LoadedImage{}, mode: displayModeCompare}
+	v.updateSoloPreview(false, true)
+	if v.soloPreviewActive || v.mode != displayModeCompare {
+		t.Fatalf("missing B started preview: mode=%v active=%v", v.mode, v.soloPreviewActive)
+	}
+
+	v.imageB = &imagedata.LoadedImage{}
+	v.updateSoloPreview(true, true)
+	if v.mode != displayModeSingleB {
+		t.Fatalf("both keys: mode=%v, want single B", v.mode)
+	}
+	v.updateSoloPreview(false, false)
+	if v.mode != displayModeCompare {
+		t.Fatalf("release after both keys: mode=%v, want compare", v.mode)
+	}
+}

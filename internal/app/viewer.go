@@ -92,6 +92,10 @@ type Viewer struct {
 	decodedB *imagedata.DecodedImage
 
 	mode displayMode
+	// The 1/2 keys temporarily override mode while held. Keep the previous mode
+	// so comparison (or the other single-image view) can be restored on release.
+	modeBeforeSoloPreview displayMode
+	soloPreviewActive     bool
 
 	view       render.View
 	targetView render.View
@@ -257,7 +261,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	case displayModeSingleA:
 		render.DrawImage(screen, v.imageA, v.windowWidth, v.windowHeight, v.view, showShadow)
 	case displayModeSingleB:
-		render.DrawImage(screen, v.imageB, v.windowWidth, v.windowHeight, v.view, showShadow)
+		render.DrawComparisonImage(screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, v.view, showShadow)
 	case displayModeCompare:
 		v.restoreSliderAfterResize()
 		v.ensureSliderPosition()

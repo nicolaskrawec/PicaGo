@@ -38,7 +38,7 @@ chemins de rendu dont les fonctionnalités ne sont pas strictement équivalentes
 
 ## Constats
 
-### [Élevé] Les touches `1` et `2` ne sont pas réellement temporaires
+### [Corrigé] Les touches `1` et `2` n'étaient pas réellement temporaires
 
 Référence : `internal/app/commands.go:343-348`
 
@@ -50,10 +50,9 @@ comparaison précédent.
 Conséquence : après avoir relâché la touche, l'utilisateur reste sur une seule
 image et doit appuyer sur `H`, `V` ou `C` pour retrouver la comparaison.
 
-Recommandation : conserver un `modeBeforeSoloPreview`, utiliser les événements
-de pression/relâchement, puis restaurer le mode antérieur quand aucune des deux
-touches n'est maintenue. Ajouter des tests pour `1`, `2`, leur relâchement et le
-cas où aucune image B n'est chargée.
+Correction appliquée : le mode précédent est maintenant mémorisé au premier
+appui et restauré lorsque les touches sont relâchées. Des tests couvrent `1`,
+`2`, les deux touches simultanées et l'absence d'image B.
 
 ### [Élevé] Les décodages remplacés continuent à consommer des ressources
 
@@ -237,4 +236,3 @@ ratios différents et positions connues).
 4. Définir une politique claire pour les animations simultanées.
 5. Sécuriser le nettoyage du script PowerShell.
 6. Étendre les tests avant d'ajouter de nouveaux modes de comparaison.
-

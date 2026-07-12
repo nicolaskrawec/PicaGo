@@ -11,6 +11,25 @@ import (
 	imagedata "viewergo/internal/image"
 )
 
+// DrawComparisonImage draws B with the exact scale and center used by the
+// comparison modes. It is used by the temporary solo-B preview so switching
+// between compare and B does not introduce a visual zoom jump.
+func DrawComparisonImage(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, showShadow bool) {
+	if imageB == nil || imageB.GPUTexture == nil {
+		return
+	}
+	if imageA == nil {
+		DrawImage(screen, imageB, windowWidth, windowHeight, view, showShadow)
+		return
+	}
+	rectA := ImageRectForView(windowWidth, windowHeight, imageA.Width, imageA.Height, view)
+	rectB := compareRectForView(rectA, imageA.Width, imageA.Height, imageB.Width, imageB.Height, view)
+	if showShadow && !imageB.HasTransparency {
+		drawShadow(screen, imageB.Width, imageB.Height, windowWidth, windowHeight, rectB, view)
+	}
+	drawTexture(screen, imageB.GPUTexture, rectB, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, view.Alpha)
+}
+
 func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, sliderPosition float64, orientation int, feathered bool, reverse bool, sliderOpacity float64, showShadow bool) {
 	DrawImage(screen, imageA, windowWidth, windowHeight, view, showShadow)
 	if imageA == nil || imageB == nil || imageB.GPUTexture == nil {
