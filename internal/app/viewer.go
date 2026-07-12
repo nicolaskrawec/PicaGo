@@ -1302,6 +1302,12 @@ func (v *Viewer) updateCompareForRotation(quarterTurns, targetRotation int, targ
 	if v.imageB == nil || v.mode != displayModeCompare {
 		return
 	}
+	// A circular mask has no directional side to rotate. Its A/B selection is
+	// an explicit user choice and must not inherit the split slider's
+	// top/right/bottom/left remapping.
+	if v.compareMask == compareMaskCircle {
+		return
+	}
 	oldOrientation := v.slider.Orientation
 	oldRect := v.currentImageRect()
 	positionRatio := 0.5
