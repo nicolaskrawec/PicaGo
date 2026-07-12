@@ -592,7 +592,7 @@ func (v *Viewer) Update() error {
 		v.setCircleCompare()
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyShift) && (inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) || inpututil.IsKeyJustPressed(ebiten.KeyArrowRight)) {
-		v.toggleFlipHorizontal()
+		v.toggleScreenMirror(true)
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyL) {
 		v.syncSliderWithImage = !v.syncSliderWithImage
@@ -782,14 +782,14 @@ func (v *Viewer) Update() error {
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
 		if ebiten.IsKeyPressed(ebiten.KeyShift) {
-			v.toggleFlipVertical()
+			v.toggleScreenMirror(false)
 		} else {
 			v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1.15)
 		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
 		if ebiten.IsKeyPressed(ebiten.KeyShift) {
-			v.toggleFlipVertical()
+			v.toggleScreenMirror(false)
 		} else {
 			v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1/1.15)
 		}
@@ -899,7 +899,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 				showShadow,
 			)
 		} else {
-			if v.rotationAnimationActive {
+			if v.rotationAnimationActive || v.mirrorAnimationActive {
 				render.DrawCompareRotating(
 					screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, v.view,
 					v.rotationSplitLocalSide, v.rotationSplitLocalRatio, v.sliderOpacity, showShadow,
@@ -1245,8 +1245,23 @@ func (v *Viewer) toggleFlipVertical() {
 	v.startMirrorAnimation(false)
 }
 
+// toggleScreenMirror maps the requested visible axis back to the image's
+// local axes. A quarter turn swaps horizontal and vertical on screen.
+func (v *Viewer) toggleScreenMirror(horizontal bool) {
+	rotation := ((v.view.Rotation % 4) + 4) % 4
+	if rotation%2 != 0 {
+		horizontal = !horizontal
+	}
+	if horizontal {
+		v.toggleFlipHorizontal()
+	} else {
+		v.toggleFlipVertical()
+	}
+}
+
 func (v *Viewer) startMirrorAnimation(horizontal bool) {
 	v.rememberCurrentImageView()
+	localSide, localRatio, hasLocalSplit := v.captureCompareLocalSplit()
 	if v.mirrorAnimationActive && v.mirrorAnimationHorizontal == horizontal {
 		v.mirrorAnimationFrom = v.mirrorAnimationTo
 		v.mirrorAnimationTo = -v.mirrorAnimationTo
@@ -1272,6 +1287,97 @@ func (v *Viewer) startMirrorAnimation(horizontal bool) {
 		v.view.MirrorScaleY = v.mirrorAnimationFrom
 		v.targetView.MirrorScaleY = v.mirrorAnimationTo
 	}
+	if hasLocalSplit {
+		v.rotationSplitLocalSide = localSide
+		v.rotationSplitLocalRatio = localRatio
+		v.applyCompareLocalSplit(localSide, localRatio, v.targetView)
+	}
+}
+
+func (v *Viewer) captureCompareLocalSplit() (int, float64, bool) {
+	if v.imageA == nil || v.imageB == nil || v.mode != displayModeCompare || v.compareMask != compareMaskSplit {
+		return 0, 0, false
+	}
+	rect := v.currentImageRect()
+	if rect.Empty() {
+		return 0, 0, false
+	}
+	screenSide := 1
+	ratio := (v.slider.Position - float64(rect.Min.X)) / float64(rect.Dx())
+	if v.slider.Orientation == compare.OrientationHorizontal {
+		ratio = (v.slider.Position - float64(rect.Min.Y)) / float64(rect.Dy())
+		if v.reverseCompare {
+			screenSide = 0
+		} else {
+			screenSide = 2
+		}
+	} else if v.reverseCompare {
+		screenSide = 3
+	}
+	ratio = clampFloat64(ratio, 0, 1)
+	rotation := ((v.view.Rotation % 4) + 4) % 4
+	if splitRatioReversedByRotation(rotation, screenSide) {
+		ratio = 1 - ratio
+	}
+	localSide := (screenSide - rotation + 4) % 4
+	flipH, flipV := effectiveViewFlips(v.view)
+	if flipH && (localSide == 1 || localSide == 3) {
+		localSide = 4 - localSide
+		ratio = 1 - ratio
+	}
+	if flipV && (localSide == 0 || localSide == 2) {
+		localSide = 2 - localSide
+		ratio = 1 - ratio
+	}
+	return localSide, ratio, true
+}
+
+func (v *Viewer) applyCompareLocalSplit(localSide int, ratio float64, view render.View) {
+	flipH, flipV := effectiveViewFlips(view)
+	if flipH && (localSide == 1 || localSide == 3) {
+		localSide = 4 - localSide
+		ratio = 1 - ratio
+	}
+	if flipV && (localSide == 0 || localSide == 2) {
+		localSide = 2 - localSide
+		ratio = 1 - ratio
+	}
+	rotation := ((view.Rotation % 4) + 4) % 4
+	screenSide := (localSide + rotation) % 4
+	if splitRatioReversedByRotation(rotation, screenSide) {
+		ratio = 1 - ratio
+	}
+	ratio = clampFloat64(ratio, 0, 1)
+	v.reverseCompare = screenSide == 0 || screenSide == 3
+	if screenSide == 0 || screenSide == 2 {
+		v.slider.Orientation = compare.OrientationHorizontal
+	} else {
+		v.slider.Orientation = compare.OrientationVertical
+	}
+	rect := render.ImageRectForView(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, view)
+	if v.slider.Orientation == compare.OrientationHorizontal {
+		v.slider.Position = float64(rect.Min.Y) + ratio*float64(rect.Dy())
+	} else {
+		v.slider.Position = float64(rect.Min.X) + ratio*float64(rect.Dx())
+	}
+	v.sliderSyncRatio = ratio
+}
+
+func effectiveViewFlips(view render.View) (bool, bool) {
+	flipH, flipV := view.FlipHorizontal, view.FlipVertical
+	if math.Abs(view.MirrorScaleX) > 0.001 {
+		flipH = view.MirrorScaleX < 0
+	}
+	if math.Abs(view.MirrorScaleY) > 0.001 {
+		flipV = view.MirrorScaleY < 0
+	}
+	return flipH, flipV
+}
+
+func splitRatioReversedByRotation(rotation, screenSide int) bool {
+	return rotation == 2 ||
+		(rotation == 1 && (screenSide == 1 || screenSide == 3)) ||
+		(rotation == 3 && (screenSide == 0 || screenSide == 2))
 }
 
 func (v *Viewer) rotateImage(quarterTurns int) {
@@ -1298,7 +1404,7 @@ func (v *Viewer) startRotationAnimation(quarterTurns int) {
 	v.rotationAnimationActive = true
 }
 
-func (v *Viewer) updateCompareForRotation(quarterTurns, targetRotation int, targetAngle float64) {
+func (v *Viewer) updateCompareForRotation(_ int, targetRotation int, targetAngle float64) {
 	if v.imageB == nil || v.mode != displayModeCompare {
 		return
 	}
@@ -1308,72 +1414,16 @@ func (v *Viewer) updateCompareForRotation(quarterTurns, targetRotation int, targ
 	if v.compareMask == compareMaskCircle {
 		return
 	}
-	oldOrientation := v.slider.Orientation
-	oldRect := v.currentImageRect()
-	positionRatio := 0.5
-	if oldOrientation == compare.OrientationHorizontal && oldRect.Dy() > 0 {
-		positionRatio = (v.slider.Position - float64(oldRect.Min.Y)) / float64(oldRect.Dy())
-	} else if oldOrientation == compare.OrientationVertical && oldRect.Dx() > 0 {
-		positionRatio = (v.slider.Position - float64(oldRect.Min.X)) / float64(oldRect.Dx())
-	}
-	positionRatio = clampFloat64(positionRatio, 0, 1)
-	futureView := v.view
-	futureView.Rotation = targetRotation
-	futureView.RotationAngle = targetAngle
-	futureRect := render.ImageRectForView(v.windowWidth, v.windowHeight, v.imageA.Width, v.imageA.Height, futureView)
-	oldRotation := ((v.view.Rotation % 4) + 4) % 4
-	newRotation := ((targetRotation % 4) + 4) % 4
-	oldSide := 1 // right
-	if v.slider.Orientation == compare.OrientationHorizontal {
-		if v.reverseCompare {
-			oldSide = 0 // top
-		} else {
-			oldSide = 2 // bottom
-		}
-	} else if v.reverseCompare {
-		oldSide = 3 // left
-	}
-	localSide := (oldSide - oldRotation + 4) % 4
-	localRatio := positionRatio
-	if oldRotation == 2 ||
-		(oldRotation == 1 && (oldSide == 1 || oldSide == 3)) ||
-		(oldRotation == 3 && (oldSide == 0 || oldSide == 2)) {
-		localRatio = 1 - localRatio
+	localSide, localRatio, ok := v.captureCompareLocalSplit()
+	if !ok {
+		return
 	}
 	v.rotationSplitLocalSide = localSide
 	v.rotationSplitLocalRatio = localRatio
-	newSide := (localSide + newRotation) % 4
-	switch newSide {
-	case 0: // top
-		v.slider.Orientation = compare.OrientationHorizontal
-		v.reverseCompare = true
-	case 1: // right
-		v.slider.Orientation = compare.OrientationVertical
-		v.reverseCompare = false
-	case 2: // bottom
-		v.slider.Orientation = compare.OrientationHorizontal
-		v.reverseCompare = false
-	case 3: // left
-		v.slider.Orientation = compare.OrientationVertical
-		v.reverseCompare = true
-	}
-	// Preserve the distance from B's side of the split. Comparing the sides
-	// directly is less error-prone than deriving this from the rotation sign:
-	// for example, right -> bottom keeps the ratio, while right -> top and
-	// right -> left must invert it.
-	oldMaxSide := oldSide == 1 || oldSide == 2 // right or bottom
-	newMaxSide := newSide == 1 || newSide == 2 // right or bottom
-	if oldMaxSide != newMaxSide {
-		positionRatio = 1 - positionRatio
-	}
-	// The regular viewport synchronization runs every frame and would
-	// otherwise restore the ratio captured before the rotation.
-	v.sliderSyncRatio = positionRatio
-	if v.slider.Orientation == compare.OrientationHorizontal {
-		v.slider.Position = float64(futureRect.Min.Y) + positionRatio*float64(futureRect.Dy())
-	} else {
-		v.slider.Position = float64(futureRect.Min.X) + positionRatio*float64(futureRect.Dx())
-	}
+	futureView := v.view
+	futureView.Rotation = targetRotation
+	futureView.RotationAngle = targetAngle
+	v.applyCompareLocalSplit(localSide, localRatio, futureView)
 }
 
 func (v *Viewer) currentImageRect() stdimage.Rectangle {
