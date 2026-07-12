@@ -1,57 +1,74 @@
 # PicaGo
 
-PicaGo is a fast desktop image viewer written in Go with [Ebitengine](https://ebitengine.org/).
+**A fast, fluid and distraction-free image viewer built for people who want to
+look at images, not fight with an interface.**
 
-The goal of the project is simple: bring back the kind of lightweight, immediate image browsing experience that felt great in older desktop tools, with a strong focus on quick comparison workflows. It is especially inspired by the old Picasa image viewer: open an image instantly, move around fluidly, jump through neighboring files, and compare two images without friction.
+Inspired by the immediacy of the classic Picasa viewer, PicaGo opens images
+quickly, navigates through folders smoothly and offers a powerful two-image
+comparison workflow without covering the picture with toolbars.
 
-## What It Does
-
-PicaGo is designed for:
-
-- quickly opening and inspecting images
-- moving through images in the same folder
-- comparing two images with an interactive split slider
-- zooming and panning with minimal UI overhead
-- keeping the viewer responsive and uncluttered
+Use it for everyday browsing, checking a retouch against its original,
+comparing exports, spotting compression differences, or performing fast visual
+QA. The interface stays out of the way until you need it.
 
 ## Features
 
-- Fast single-image viewing.
-- Drag and drop support to load images directly into the viewer.
-- Folder navigation with previous/next image shortcuts.
-- Fit-to-window behavior for quick reset and clean framing.
-- Smooth zooming centered around the mouse cursor.
-- Pan navigation by dragging the image.
-- Two-image comparison mode.
-- Vertical or horizontal split comparison.
-- Reversible comparison direction.
-- Slider line that fades in near interaction and stays visible at image edges.
-- Optional slider sync with image movement.
-- Borderless fullscreen / maximized viewing mode.
-- Corner actions in fullscreen mode for fast navigation and close.
-- Windows executable icon integration during build.
-- Automatic version injection from Git metadata.
+- Fast image opening and fluid folder navigation.
+- Open an image from the command line or drop images and folders into the window.
+- Navigate through every supported image in the current folder.
+- Smooth cursor-centered zoom, 100% view, fit-to-window and mouse panning.
+- Animated clockwise and counter-clockwise rotation.
+- Animated horizontal and vertical mirroring.
+- Borderless fullscreen with discreet corner and bottom-edge actions.
+- Compare two images with vertical, horizontal or circular masks.
+- Reverse which side or area reveals the comparison image.
+- Optional soft mask edge, image shadow and slider/image synchronization.
+- Compare images with different dimensions and aspect ratios.
+
+## Getting Started
+
+Open an image by passing its path to PicaGo:
+
+```text
+PicaGo photo.jpg
+```
+
+You can also start PicaGo without an argument and drag an image into the
+window. Dropping a second image activates the comparison workflow. Dropping
+multiple images uses the first two supported files as images A and B, while
+dropping a folder opens its first supported image.
+
+Use the left and right arrows, or the bottom action bar, to browse neighboring
+images in the same directory.
 
 ## Comparison Mode
 
-When a second image is loaded, PicaGo can switch to a comparison workflow:
+When a second image is loaded, PicaGo switches to a shared comparison view:
 
 - Image A stays as the base image.
 - Image B is revealed through a movable split slider.
 - The slider can be vertical or horizontal.
 - The reveal direction can be flipped.
-- The slider can stay synchronized with image movement while panning.
+- `V` selects a vertical split and `H` a horizontal split. Press the active key
+  again to reverse the revealed side.
+- `C` selects a circular mask. Press it again to exchange the inside and outside.
+- The split slider can stay synchronized with image movement while panning.
 - The slider line appears when you are close to it, fades away when idle, and remains visible when it sits on an image edge.
+- Both images, the mask and the slider rotate together.
+- Hold `1` or `2` to inspect either source image on its own.
 
 This makes it useful for before/after checks, export verification, retouch comparison, or visual QA between two versions of the same image.
 
-## Fullscreen Corner Controls
+## Screen-edge Controls
 
-In borderless fullscreen mode, the top corners act as quick actions:
+PicaGo keeps its interface minimal by exposing actions at the edges of the
+window:
 
 - Top-left corner: rotate counter-clockwise with left click or wheel up.
 - Top-left corner: rotate clockwise with right click or wheel down.
 - Top-right corner: close the viewer.
+- Bottom bar: previous image with left click or wheel up.
+- Bottom bar: next image with right click or wheel down.
 
 These controls are intentionally lightweight so the viewer can stay mostly chrome-free.
 
@@ -62,8 +79,14 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Left drag` on the image: pan.
 - `Mouse wheel`: zoom in and out around the cursor.
 - `Left drag` on the comparison slider: move the split.
+- `Shift + mouse wheel` in circular mode: resize the circular mask.
 - `Double click` on the image: toggle fullscreen / restore window.
-- `Drag and drop`: load an image.
+- `Drag and drop`: load one or two images, or the first image in a folder.
+- `Top-left + left click/wheel up`: rotate 90 degrees counter-clockwise.
+- `Top-left + right click/wheel down`: rotate 90 degrees clockwise.
+- `Top-right + left click`: quit.
+- `Bottom bar + left click/wheel up`: previous image.
+- `Bottom bar + right click/wheel down`: next image.
 
 ### Keyboard
 
@@ -71,17 +94,23 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Right Arrow`: next image in the current folder.
 - `Up Arrow`: zoom in.
 - `Down Arrow`: zoom out.
+- `Ctrl + Left Arrow`: rotate 90 degrees counter-clockwise.
+- `Ctrl + Right Arrow`: rotate 90 degrees clockwise.
+- `Shift + Left/Right Arrow`: mirror horizontally.
+- `Shift + Up/Down Arrow`: mirror vertically.
 - `R`: reset to fit-to-window.
+- `Z` (`W` on some keyboard layouts): toggle 100% / maximum fit.
 - `F1`: toggle help overlay.
 - `F11`: toggle borderless fullscreen.
 - `H`: horizontal split comparison.
 - `V`: vertical split comparison.
-- `M`: mirror horizontally.
+- Press `H` or `V` again: reverse the split direction.
+- `C`: circular comparison mask; press again to invert it.
+- `B`: toggle the soft/blurred comparison edge.
 - `L`: toggle slider sync with image movement.
-- `1`: show image A only.
-- `2`: show image B only.
-- `C`: switch to compare mode.
-- `S`: switch to compare mode.
+- `S`: toggle the image shadow.
+- Hold `1`: show image A only.
+- Hold `2`: show image B only.
 - `Esc`: quit.
 
 ## Supported Formats
@@ -99,7 +128,7 @@ Currently supported formats:
 
 - Go installed
 - Git installed for automatic build versioning
-- Windows for the PowerShell build script
+- PowerShell on Windows, or Bash on Linux, for the build scripts
 
 ## Run in Development
 
@@ -125,6 +154,13 @@ From the project root:
 .\scripts\build.ps1
 ```
 
+On Linux:
+
+```bash
+chmod +x ./scripts/build.sh
+./scripts/build.sh
+```
+
 The script:
 
 - computes the version automatically from Git
@@ -148,6 +184,14 @@ Examples:
 .\scripts\build.ps1 -Version v1.3.0
 ```
 
+Linux/Bash equivalents:
+
+```bash
+./scripts/build.sh --targets linux/amd64
+./scripts/build.sh --targets windows/amd64,linux/amd64,darwin/arm64
+./scripts/build.sh --version v1.3.0
+```
+
 For Windows builds, the script uses `rsrc`.
 Install it once with:
 
@@ -159,3 +203,10 @@ The `internal/assets/icon.ico` file is used:
 
 - as the application window icon
 - as the Windows `.exe` file icon during build
+
+## Technical Notes
+
+PicaGo is written in Go and uses
+[Ebitengine](https://ebitengine.org/) for its desktop rendering and input loop.
+The build scripts inject version information from Git and can produce Windows,
+Linux and macOS binaries for AMD64 and ARM64.
