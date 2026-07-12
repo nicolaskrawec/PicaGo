@@ -152,7 +152,7 @@ Recommandation : supprimer la seconde déclaration et ajouter des tests de
 conversion pour `v1.2.3`, `v1.2.3+4.sha`, une version `dev` et des valeurs hors
 des limites de `VERSIONINFO`.
 
-### [Moyen] La détection de transparence parcourt tous les pixels
+### [Corrigé] La détection de transparence parcourt tous les pixels
 
 Référence : `internal/image/decode.go:120-172`
 
@@ -164,10 +164,22 @@ complet après le décodage, via une interface relativement coûteuse.
 Conséquence : temps d'ouverture et consommation CPU inutilement élevés pour de
 grands PNG/TIFF opaques.
 
-Recommandation : traiter directement les types concrets (`RGBA`, `NRGBA`,
-`RGBA64`, etc.), utiliser les buffers de pixels et leur stride, ou décider la
-transparence à partir du format/type lorsque c'est possible. Mesurer avant et
-après avec des images représentatives.
+Correction appliquée : la détection automatique de l'alpha est désactivée afin
+d'éviter le second parcours complet des pixels après le décodage. Le champ
+`HasTransparency` est désormais faux par défaut ; les images sont donc
+considérées comme opaques pour la logique d'ombre.
+
+### Fonctionnalités ajoutées depuis la revue
+
+- Un mode fit persistant est activé à l'ouverture ou avec `R` / le retour de
+  `Z` vers le fit. Un déplacement ou un zoom manuel le désactive. Le fit est
+  recalculé lors d'un redimensionnement ou d'un passage plein écran/fenêtre,
+  sans rejouer l'animation de zoom.
+- Le glisser-déposer d'une image unique cible A dans la moitié gauche de la
+  fenêtre et B dans la moitié droite. Sans image A, toute la fenêtre cible A.
+- En mode comparaison, `Ctrl + molette` règle l'opacité de l'image révélée par
+  le masque entre 0 et 100 %. Le rendu circulaire utilise des bandes contiguës
+  pour éviter les lignes verticales à opacité partielle.
 
 ### [Faible] Du code de clipping transformé semble devenu inaccessible
 

@@ -24,6 +24,10 @@ QA. The interface stays out of the way until you need it.
 - Reverse which side or area reveals the comparison image.
 - Optional soft mask edge, image shadow and slider/image synchronization.
 - Compare images with different dimensions and aspect ratios.
+- Drag and drop onto the left or right half of the window to replace image A or
+  B directly.
+- Persistent fit-to-window mode that follows window resizing and fullscreen
+  transitions.
 
 ## Getting Started
 
@@ -34,9 +38,11 @@ PicaGo photo.jpg
 ```
 
 You can also start PicaGo without an argument and drag an image into the
-window. Dropping a second image activates the comparison workflow. Dropping
-multiple images uses the first two supported files as images A and B, while
-dropping a folder opens its first supported image.
+window. With an image already loaded, drop on the left half to replace image A
+or on the right half to replace image B. Dropping a second image activates the
+comparison workflow. Dropping multiple images uses the first two supported
+files as images A and B, while dropping a folder opens its first supported
+image.
 
 Use the left and right arrows, or the bottom action bar, to browse neighboring
 images in the same directory.
@@ -80,6 +86,7 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Mouse wheel`: zoom in and out around the cursor.
 - `Left drag` on the comparison slider: move the split.
 - `Shift + mouse wheel` in circular mode: resize the circular mask.
+- `Ctrl + mouse wheel` in comparison mode: change the mask opacity.
 - `Double click` on the image: toggle fullscreen / restore window.
 - `Drag and drop`: load one or two images, or the first image in a folder.
 - `Top-left + left click/wheel up`: rotate 90 degrees counter-clockwise.
@@ -98,8 +105,10 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Ctrl + Right Arrow`: rotate 90 degrees clockwise.
 - `Shift + Left/Right Arrow`: mirror horizontally.
 - `Shift + Up/Down Arrow`: mirror vertically.
-- `R`: reset to fit-to-window.
+- `R`: reset to fit-to-window and keep fit mode active.
 - `Z` (`W` on some keyboard layouts): toggle 100% / maximum fit.
+- Manual panning or zooming leaves persistent fit mode; resizing then keeps the
+  chosen view instead of refitting it.
 - `F1`: toggle help overlay.
 - `F11`: toggle borderless fullscreen.
 - `H`: horizontal split comparison.
