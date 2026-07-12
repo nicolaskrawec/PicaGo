@@ -106,7 +106,8 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Shift + Left/Right Arrow`: mirror horizontally.
 - `Shift + Up/Down Arrow`: mirror vertically.
 - `R`: reset to fit-to-window and keep fit mode active.
-- `Z` (`W` on some keyboard layouts): toggle 100% / maximum fit.
+- `Z` (`W` on some keyboard layouts): toggle 100% / maximum fit, centered on
+  the mouse cursor when switching to 100%.
 - Manual panning or zooming leaves persistent fit mode; resizing then keeps the
   chosen view instead of refitting it.
 - `F1`: toggle help overlay.

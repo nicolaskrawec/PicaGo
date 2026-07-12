@@ -53,7 +53,7 @@ func (v *Viewer) resetFit() {
 	v.ensureSliderPosition()
 }
 
-func (v *Viewer) toggleZoom100Fit() {
+func (v *Viewer) toggleZoom100Fit(mouseX, mouseY float64) {
 	if v.imageA == nil {
 		return
 	}
@@ -66,9 +66,25 @@ func (v *Viewer) toggleZoom100Fit() {
 
 	targetView := v.view
 	targetView.Zoom = 1
-	targetView.OffsetX = 0
-	targetView.OffsetY = 0
 	targetView.Alpha = 1
+	imageRect := v.currentImageRect()
+	if !imageRect.Empty() {
+		mouseX = clampFloat64(mouseX, float64(imageRect.Min.X), float64(imageRect.Max.X))
+		mouseY = clampFloat64(mouseY, float64(imageRect.Min.Y), float64(imageRect.Max.Y))
+	}
+	centerX := float64(v.windowWidth) / 2
+	centerY := float64(v.windowHeight) / 2
+	imageCenterX := float64(v.imageA.Width) / 2
+	imageCenterY := float64(v.imageA.Height) / 2
+	if v.view.Zoom > 0 {
+		worldX := (mouseX-centerX-v.view.OffsetX)/v.view.Zoom + imageCenterX
+		worldY := (mouseY-centerY-v.view.OffsetY)/v.view.Zoom + imageCenterY
+		targetView.OffsetX = mouseX - centerX - (worldX-imageCenterX)*targetView.Zoom
+		targetView.OffsetY = mouseY - centerY - (worldY-imageCenterY)*targetView.Zoom
+	} else {
+		targetView.OffsetX = 0
+		targetView.OffsetY = 0
+	}
 	v.fitMode = false
 	v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
 	v.targetView = targetView

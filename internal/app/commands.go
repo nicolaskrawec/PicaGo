@@ -105,7 +105,8 @@ func (v *Viewer) Update() error {
 	// On AZERTY, the physical key labelled Z can be reported as KeyW by
 	// Ebiten/GLFW (the key constants follow the US layout).
 	if inpututil.IsKeyJustPressed(ebiten.KeyZ) || inpututil.IsKeyJustPressed(ebiten.KeyW) {
-		v.toggleZoom100Fit()
+		zoomMouseX, zoomMouseY := ebiten.CursorPosition()
+		v.toggleZoom100Fit(float64(zoomMouseX), float64(zoomMouseY))
 	}
 	if !ebiten.IsKeyPressed(ebiten.KeyShift) && !ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
 		_ = v.loadAdjacentImage(-1)
