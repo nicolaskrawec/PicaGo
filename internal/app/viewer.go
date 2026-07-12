@@ -642,7 +642,7 @@ func (v *Viewer) Update() error {
 
 	if leftMousePressed && !v.leftMouseDown {
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
-			_ = v.loadAdjacentImage(-1)
+			v.rotateImage(-1)
 			v.leftMouseDown = true
 			return nil
 		}
@@ -707,7 +707,7 @@ func (v *Viewer) Update() error {
 	}
 	if rightMousePressed && !v.rightMouseDown {
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
-			_ = v.loadAdjacentImage(1)
+			v.rotateImage(1)
 			v.rightMouseDown = true
 			return nil
 		}
@@ -764,9 +764,9 @@ func (v *Viewer) Update() error {
 		shiftPressed := ebiten.IsKeyPressed(ebiten.KeyShift)
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			if wheelDelta > 0 {
-				_ = v.loadAdjacentImage(-1)
+				v.rotateImage(-1)
 			} else {
-				_ = v.loadAdjacentImage(1)
+				v.rotateImage(1)
 			}
 		} else if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
 			if wheelDelta > 0 {
@@ -956,7 +956,7 @@ func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTo
 		options.ColorScale.Reset()
 		options.ColorScale.ScaleWithColor(fill)
 		vector.FillPath(screen, topLeft, &vector.FillOptions{}, options)
-		ebitenutil.DebugPrintAt(screen, "<>", 8, 8)
+		ebitenutil.DebugPrintAt(screen, "R", 8, 8)
 	}
 
 	if showTopRight {

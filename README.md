@@ -49,8 +49,8 @@ This makes it useful for before/after checks, export verification, retouch compa
 
 In borderless fullscreen mode, the top corners act as quick actions:
 
-- Top-left corner: previous image with left click.
-- Top-left corner: next image with right click or mouse wheel in the corner.
+- Top-left corner: rotate counter-clockwise with left click or wheel up.
+- Top-left corner: rotate clockwise with right click or wheel down.
 - Top-right corner: close the viewer.
 
 These controls are intentionally lightweight so the viewer can stay mostly chrome-free.
