@@ -171,6 +171,8 @@ type Viewer struct {
 	rotationAnimationStart    time.Time
 	rotationAnimationFrom     float64
 	rotationAnimationTo       float64
+	rotationSplitLocalSide    int
+	rotationSplitLocalRatio   float64
 	pendingRotationTurns      int
 	mirrorAnimationActive     bool
 	mirrorAnimationStart      time.Time
@@ -897,20 +899,27 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 				showShadow,
 			)
 		} else {
-			render.DrawCompare(
-				screen,
-				v.imageA,
-				v.imageB,
-				v.windowWidth,
-				v.windowHeight,
-				v.view,
-				v.slider.Position,
-				int(v.slider.Orientation),
-				v.showBlur,
-				v.reverseCompare,
-				v.sliderOpacity,
-				showShadow,
-			)
+			if v.rotationAnimationActive {
+				render.DrawCompareRotating(
+					screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, v.view,
+					v.rotationSplitLocalSide, v.rotationSplitLocalRatio, v.sliderOpacity, showShadow,
+				)
+			} else {
+				render.DrawCompare(
+					screen,
+					v.imageA,
+					v.imageB,
+					v.windowWidth,
+					v.windowHeight,
+					v.view,
+					v.slider.Position,
+					int(v.slider.Orientation),
+					v.showBlur,
+					v.reverseCompare,
+					v.sliderOpacity,
+					showShadow,
+				)
+			}
 		}
 	}
 	mouseX, mouseY := ebiten.CursorPosition()
@@ -1319,6 +1328,14 @@ func (v *Viewer) updateCompareForRotation(quarterTurns, targetRotation int, targ
 		oldSide = 3 // left
 	}
 	localSide := (oldSide - oldRotation + 4) % 4
+	localRatio := positionRatio
+	if oldRotation == 2 ||
+		(oldRotation == 1 && (oldSide == 1 || oldSide == 3)) ||
+		(oldRotation == 3 && (oldSide == 0 || oldSide == 2)) {
+		localRatio = 1 - localRatio
+	}
+	v.rotationSplitLocalSide = localSide
+	v.rotationSplitLocalRatio = localRatio
 	newSide := (localSide + newRotation) % 4
 	switch newSide {
 	case 0: // top

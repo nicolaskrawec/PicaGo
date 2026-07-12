@@ -93,6 +93,33 @@ func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, wi
 	rectA := ImageRectForView(windowWidth, windowHeight, imageA.Width, imageA.Height, view)
 	imageBWidth, imageBHeight := rotatedDimensions(imageB.Width, imageB.Height, view)
 	rectB := compareRect(rectA, imageBWidth, imageBHeight)
+	// Once rotated, clipping in B's local coordinates makes the mask boundary
+	// depend on B's aspect ratio. Clip the already transformed B quad against
+	// the exact screen-space slider line instead, so mask and line coincide.
+	if math.Abs(view.RotationAngle) > 0.001 || view.MirrorScaleX != 0 || view.MirrorScaleY != 0 {
+		if orientation == 1 {
+			y := float32(clampBoundary(int(math.Ceil(sliderPosition)), rectA.Min.Y, rectA.Max.Y-1))
+			keepY := float32(rectA.Max.Y)
+			if reverse {
+				keepY = float32(rectA.Min.Y)
+			}
+			drawTransformedImageClippedByLine(screen, imageB.GPUTexture, rectB, float32(rectA.Min.X), y, float32(rectA.Max.X), y, float32(rectA.Min.X), keepY, view)
+			if sliderOpacity > 0 {
+				vector.StrokeLine(screen, float32(rectA.Min.X), y, float32(rectA.Max.X), y, 2, color.NRGBA{230, 230, 230, uint8(math.Round(96 * clampAlpha(sliderOpacity)))}, true)
+			}
+		} else {
+			x := float32(clampBoundary(int(math.Ceil(sliderPosition)), rectA.Min.X, rectA.Max.X-1))
+			keepX := float32(rectA.Max.X)
+			if reverse {
+				keepX = float32(rectA.Min.X)
+			}
+			drawTransformedImageClippedByLine(screen, imageB.GPUTexture, rectB, x, float32(rectA.Min.Y), x, float32(rectA.Max.Y), keepX, float32(rectA.Min.Y), view)
+			if sliderOpacity > 0 {
+				vector.StrokeLine(screen, x, float32(rectA.Min.Y), x, float32(rectA.Max.Y), 2, color.NRGBA{230, 230, 230, uint8(math.Round(96 * clampAlpha(sliderOpacity)))}, true)
+			}
+		}
+		return
+	}
 	switch orientation {
 	case 1:
 		visibleTop := clampBoundary(int(math.Ceil(sliderPosition)), rectA.Min.Y, rectA.Max.Y-1)
@@ -121,6 +148,116 @@ func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, wi
 			vector.FillRect(screen, float32(visibleLeft)-1, float32(rectA.Min.Y), 2, float32(rectA.Max.Y-rectA.Min.Y), color.NRGBA{230, 230, 230, uint8(math.Round(96 * clampAlpha(sliderOpacity)))}, true)
 		}
 	}
+}
+
+// DrawCompareRotating keeps the split in image-local coordinates. Both the
+// clipped image and its separator therefore use the exact same continuously
+// animated transform as the base image instead of snapping at quarter turns.
+func DrawCompareRotating(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, localSide int, ratio, sliderOpacity float64, showShadow bool) {
+	DrawImage(screen, imageA, windowWidth, windowHeight, view, showShadow)
+	if imageA == nil || imageB == nil || imageB.GPUTexture == nil {
+		return
+	}
+	ratio = clampFloat64(ratio, 0, 1)
+	rectA := ImageRectForView(windowWidth, windowHeight, imageA.Width, imageA.Height, view)
+	imageBWidth, imageBHeight := rotatedDimensions(imageB.Width, imageB.Height, view)
+	rectB := compareRect(rectA, imageBWidth, imageBHeight)
+	u0, v0, u1, v1 := ratio, 0.0, ratio, 1.0
+	keepU, keepV := .5, .5
+	if localSide == 0 || localSide == 2 {
+		u0, v0, u1, v1 = 0, ratio, 1, ratio
+	}
+	switch localSide {
+	case 0:
+		keepV = 0
+	case 1:
+		keepU = 1
+	case 2:
+		keepV = 1
+	case 3:
+		keepU = 0
+	}
+	x0, y0 := transformedLocalPoint(u0, v0, imageA.Width, imageA.Height, rectA, view)
+	x1, y1 := transformedLocalPoint(u1, v1, imageA.Width, imageA.Height, rectA, view)
+	keepX, keepY := transformedLocalPoint(keepU, keepV, imageA.Width, imageA.Height, rectA, view)
+	drawTransformedImageClippedByLine(screen, imageB.GPUTexture, rectB, x0, y0, x1, y1, keepX, keepY, view)
+	if sliderOpacity <= 0 {
+		return
+	}
+	alpha := uint8(math.Round(96 * clampAlpha(sliderOpacity)))
+	vector.StrokeLine(screen, x0, y0, x1, y1, 2, color.NRGBA{230, 230, 230, alpha}, true)
+}
+
+type clippedVertex struct {
+	x, y, u, v float32
+}
+
+func drawTransformedImageClippedByLine(screen, texture *ebiten.Image, destRect stdimage.Rectangle, x0, y0, x1, y1, keepX, keepY float32, view View) {
+	if texture == nil || destRect.Empty() {
+		return
+	}
+	b := texture.Bounds()
+	point := func(u, v float64) clippedVertex {
+		x, y := transformedLocalPoint(u, v, b.Dx(), b.Dy(), destRect, view)
+		return clippedVertex{x, y, float32(b.Min.X) + float32(u)*float32(b.Dx()), float32(b.Min.Y) + float32(v)*float32(b.Dy())}
+	}
+	polygon := []clippedVertex{point(0, 0), point(1, 0), point(1, 1), point(0, 1)}
+	side := func(x, y float32) float32 { return (x1-x0)*(y-y0) - (y1-y0)*(x-x0) }
+	keepSign := side(keepX, keepY)
+	inside := func(p clippedVertex) bool { return side(p.x, p.y)*keepSign >= -0.001 }
+	result := make([]clippedVertex, 0, 6)
+	for i, current := range polygon {
+		previous := polygon[(i+len(polygon)-1)%len(polygon)]
+		currentInside, previousInside := inside(current), inside(previous)
+		if currentInside != previousInside {
+			d0, d1 := side(previous.x, previous.y), side(current.x, current.y)
+			t := d0 / (d0 - d1)
+			result = append(result, clippedVertex{
+				previous.x + t*(current.x-previous.x), previous.y + t*(current.y-previous.y),
+				previous.u + t*(current.u-previous.u), previous.v + t*(current.v-previous.v),
+			})
+		}
+		if currentInside {
+			result = append(result, current)
+		}
+	}
+	if len(result) < 3 {
+		return
+	}
+	vertices := make([]ebiten.Vertex, len(result))
+	for i, p := range result {
+		vertices[i] = ebiten.Vertex{DstX: p.x, DstY: p.y, SrcX: p.u, SrcY: p.v, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: float32(clampAlpha(view.Alpha))}
+	}
+	indices := make([]uint16, 0, (len(result)-2)*3)
+	for i := 1; i+1 < len(result); i++ {
+		indices = append(indices, 0, uint16(i), uint16(i+1))
+	}
+	screen.DrawTriangles(vertices, indices, texture, &ebiten.DrawTrianglesOptions{Filter: ebiten.FilterLinear})
+}
+
+func transformedLocalPoint(u, v float64, width, height int, destRect stdimage.Rectangle, view View) (float32, float32) {
+	angle := view.RotationAngle * math.Pi / 2
+	cosine, sine := math.Cos(angle), math.Sin(angle)
+	rotatedWidth := float64(width)*math.Abs(cosine) + float64(height)*math.Abs(sine)
+	scale := float64(destRect.Dx()) / math.Max(1, rotatedWidth)
+	mirrorX, mirrorY := 1.0, 1.0
+	if view.FlipHorizontal {
+		mirrorX = -1
+	}
+	if view.FlipVertical {
+		mirrorY = -1
+	}
+	if view.MirrorScaleX != 0 {
+		mirrorX = view.MirrorScaleX
+	}
+	if view.MirrorScaleY != 0 {
+		mirrorY = view.MirrorScaleY
+	}
+	x := (u - .5) * float64(width) * mirrorX
+	y := (v - .5) * float64(height) * mirrorY
+	cx := float64(destRect.Min.X+destRect.Max.X) / 2
+	cy := float64(destRect.Min.Y+destRect.Max.Y) / 2
+	return float32(cx + scale*(cosine*x-sine*y)), float32(cy + scale*(sine*x+cosine*y))
 }
 
 func DrawCompareCircle(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, centerX, centerY int, diameterRatio float64, feathered bool, reverse bool, sliderOpacity float64, showShadow bool) {
