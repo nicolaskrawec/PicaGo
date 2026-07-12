@@ -151,7 +151,7 @@ for target in $targets; do
             -ver-major="$ver_major" -ver-minor="$ver_minor" -ver-patch="$ver_patch" -ver-build="$ver_build" \
             -product-ver-major="$ver_major" -product-ver-minor="$ver_minor" -product-ver-patch="$ver_patch" -product-ver-build="$ver_build" \
             -file-version="$numeric_version" -product-version="$numeric_version" \
-            -product-name=PicaGo -internal-name=PicaGo -original-name="$artifact" \
+            -product-name=PicaGo -company=NkSoft -internal-name=PicaGo -original-name="$artifact" \
             -description="PicaGo image viewer" -comment="Build $resolved_version"
     fi
 

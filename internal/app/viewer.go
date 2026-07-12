@@ -2286,7 +2286,7 @@ func (v *Viewer) helpText() string {
 	}
 
 	rotation := v.view.Rotation * 90
-	return "PicaGo " + Version + "\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nRotation : " + strconv.Itoa(rotation) + " deg\nMémoire : " + v.memoryStatusText() + "\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nShift+gauche/droite : miroir horizontal\nShift+haut/bas : miroir vertical\nCtrl+gauche : rotation anti-horaire\nCtrl+droite : rotation horaire\nMolette : zoom image\nShift+molette : zoom masque cercle\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	return "PicaGo " + Version + " - NkSoft\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nRotation : " + strconv.Itoa(rotation) + " deg\nMémoire : " + v.memoryStatusText() + "\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nShift+gauche/droite : miroir horizontal\nShift+haut/bas : miroir vertical\nCtrl+gauche : rotation anti-horaire\nCtrl+droite : rotation horaire\nMolette : zoom image\nShift+molette : zoom masque cercle\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }
 
 func (v *Viewer) memoryStatusText() string {

@@ -201,7 +201,7 @@ Linux/Bash equivalents:
 ```
 
 For Windows builds, the script uses `goversioninfo` to embed the icon and the
-Windows file properties (`ProductName`, `FileDescription`, `FileVersion`,
+Windows file properties (`ProductName`, `CompanyName`, `FileDescription`, `FileVersion`,
 `ProductVersion` and `OriginalFilename`).
 Install it once with:
 

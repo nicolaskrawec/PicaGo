@@ -106,7 +106,7 @@ function New-WindowsResource {
         "-ver-major=$($parts[0])", "-ver-minor=$($parts[1])", "-ver-patch=$($parts[2])", "-ver-build=$($parts[3])",
         "-product-ver-major=$($parts[0])", "-product-ver-minor=$($parts[1])", "-product-ver-patch=$($parts[2])", "-product-ver-build=$($parts[3])",
         "-file-version=$numericVersion", "-product-version=$numericVersion",
-        "-product-name=PicaGo", "-internal-name=PicaGo", "-original-name=$OriginalFilename",
+        "-product-name=PicaGo", "-company=NkSoft", "-internal-name=PicaGo", "-original-name=$OriginalFilename",
         "-description=PicaGo image viewer", "-comment=Build $ResolvedVersion"
     )
     & $tool @arguments
