@@ -98,8 +98,9 @@ viewer et de la comparaison, puis le confort d'utilisation et la distribution.
 
 ## Maintenance du projet
 
-- [ ] Découper progressivement `internal/app/viewer.go` en modules plus ciblés :
-  chargement, navigation, comparaison, animations, commandes et fenêtre.
+- [x] Découper `internal/app/viewer.go` en modules ciblés : chargement,
+  navigation, comparaison, animations, commandes, fenêtre et UI. Le rendu est
+  également séparé entre comparaison, textures et ombres.
 - [ ] Centraliser les raccourcis dans une table unique utilisée à la fois par
   l'application, l'aide `F1` et le README afin d'éviter les divergences.
 - [ ] Documenter les invariants du rendu comparatif : repère commun, échelle,
@@ -114,4 +115,3 @@ viewer et de la comparaison, puis le confort d'utilisation et la distribution.
   HEIC, éventuellement RAW via une dépendance dédiée).
 - [ ] Outils de mesure simples : coordonnées du pixel, valeur RGB et distance.
 - [ ] Export d'une capture de comparaison avec le masque ou la différence visible.
-
