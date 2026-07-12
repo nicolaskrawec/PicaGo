@@ -306,7 +306,10 @@ func (v *Viewer) Update() error {
 	if wheelDelta != 0 {
 		v.markCompareBorderActivity(now)
 		shiftPressed := ebiten.IsKeyPressed(ebiten.KeyShift)
-		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
+		controlPressed := ebiten.IsKeyPressed(ebiten.KeyControl)
+		if v.mode == displayModeCompare && v.imageB != nil && controlPressed {
+			v.adjustCompareMaskAlpha(wheelDelta)
+		} else if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			if wheelDelta > 0 {
 				v.rotateImage(-1)
 			} else {

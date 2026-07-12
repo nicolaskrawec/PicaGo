@@ -179,3 +179,19 @@ func TestImageDropSlotUsesWindowCenter(t *testing.T) {
 		}
 	}
 }
+
+func TestAdjustCompareMaskAlphaClamps(t *testing.T) {
+	v := Viewer{compareMaskAlpha: 0.5}
+	v.adjustCompareMaskAlpha(2)
+	if v.compareMaskAlpha != 0.7 {
+		t.Fatalf("alpha after wheel up = %v, want 0.7", v.compareMaskAlpha)
+	}
+	v.adjustCompareMaskAlpha(10)
+	if v.compareMaskAlpha != 1 {
+		t.Fatalf("alpha upper clamp = %v, want 1", v.compareMaskAlpha)
+	}
+	v.adjustCompareMaskAlpha(-20)
+	if v.compareMaskAlpha != 0 {
+		t.Fatalf("alpha lower clamp = %v, want 0", v.compareMaskAlpha)
+	}
+}

@@ -87,6 +87,10 @@ func (v *Viewer) adjustCircleMaskDiameter(wheelDelta float64) {
 	v.circleMaskDiameter = clampFloat64(v.circleMaskDiameter*math.Pow(1.15, wheelDelta), 0.02, 1)
 }
 
+func (v *Viewer) adjustCompareMaskAlpha(wheelDelta float64) {
+	v.compareMaskAlpha = clampFloat64(v.compareMaskAlpha+wheelDelta*0.1, 0, 1)
+}
+
 func (v *Viewer) markCompareBorderActivity(now time.Time) {
 	v.lastCompareBorderAt = now
 }

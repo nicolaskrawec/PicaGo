@@ -116,6 +116,7 @@ type Viewer struct {
 	slider                compare.Slider
 	sliderInitialized     bool
 	sliderOpacity         float64
+	compareMaskAlpha      float64
 	circleBorderOpacity   float64
 	showShadow            bool
 	showBlur              bool
@@ -202,6 +203,7 @@ func Run(args []string) error {
 		windowHeight:          480,
 		slider:                compare.Slider{Orientation: compare.OrientationVertical},
 		circleMaskDiameter:    defaultCircleMaskDiameterRatio,
+		compareMaskAlpha:      1,
 		lastCompareBorderAt:   time.Now(),
 		lastActivityAt:        time.Now(),
 		showShadow:            true,
@@ -293,6 +295,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 				v.circleMaskDiameter,
 				v.showBlur,
 				v.reverseCompare,
+				v.compareMaskAlpha,
 				v.circleBorderOpacity,
 				showShadow,
 			)
@@ -300,7 +303,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 			if v.rotationAnimationActive || v.mirrorAnimationActive {
 				render.DrawCompareRotating(
 					screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, v.view,
-					v.rotationSplitLocalSide, v.rotationSplitLocalRatio, v.sliderOpacity, showShadow,
+					v.rotationSplitLocalSide, v.rotationSplitLocalRatio, v.compareMaskAlpha, v.sliderOpacity, showShadow,
 				)
 			} else {
 				render.DrawCompare(
@@ -314,6 +317,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 					int(v.slider.Orientation),
 					v.showBlur,
 					v.reverseCompare,
+					v.compareMaskAlpha,
 					v.sliderOpacity,
 					showShadow,
 				)
