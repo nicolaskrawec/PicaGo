@@ -253,7 +253,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 			// A resize should settle on the new fit immediately instead of
 			// animating the zoom again. Do not affect the initial image fit,
 			// which may intentionally animate when the first frame is displayed.
-			if v.imageA != nil && v.windowWidth > 0 && v.windowHeight > 0 {
+			if v.imageA != nil && v.windowWidth > 0 && v.windowHeight > 0 && !v.animateInitialFit {
 				v.skipNextFitAnimation = true
 			}
 			v.pendingResetFit = true
