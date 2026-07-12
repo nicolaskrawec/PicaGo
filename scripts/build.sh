@@ -89,14 +89,30 @@ build_version() {
     printf '%s%s\n' "$resolved" "$dirty"
 }
 
-rsrc_tool() {
+goversioninfo_tool() {
     local tool
-    tool="$(go env GOPATH)/bin/rsrc"
+    tool="$(go env GOPATH)/bin/goversioninfo"
     if [[ ! -x "$tool" ]]; then
-        echo "rsrc not found. Install it with: go install github.com/akavel/rsrc@latest" >&2
+        echo "goversioninfo not found. Install it with: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest" >&2
         return 1
     fi
     printf '%s\n' "$tool"
+}
+
+windows_version() {
+    local value="$1" numbers part result="" count=0
+    numbers="$(printf '%s' "$value" | tr -cs '0-9' '\n')"
+    while IFS= read -r part && ((count < 4)); do
+        [[ -z "$part" ]] && continue
+        ((part > 65535)) && part=65535
+        result+="${result:+.}$((10#$part))"
+        ((count += 1))
+    done <<< "$numbers"
+    while ((count < 4)); do
+        result+="${result:+.}0"
+        ((count += 1))
+    done
+    printf '%s\n' "$result"
 }
 
 generated_resource=""
@@ -120,16 +136,26 @@ for target in $targets; do
     goos="${target%%/*}"
     goarch="${target##*/}"
     suffix=""
+    artifact=""
     ldflags="-s -w -X viewergo/internal/app.Version=$resolved_version"
 
     if [[ "$goos" == "windows" ]]; then
         suffix=".exe"
         ldflags="$ldflags -H windowsgui"
         generated_resource="$project_root/rsrc_windows_${goarch}.syso"
-        "$(rsrc_tool)" -ico "$project_root/internal/assets/icon.ico" -arch "$goarch" -o "$generated_resource"
+        artifact="PicaGo_${resolved_version}_${goos}_${goarch}${suffix}"
+        numeric_version="$(windows_version "$resolved_version")"
+        IFS=. read -r ver_major ver_minor ver_patch ver_build <<< "$numeric_version"
+        GOARCH="$goarch" "$(goversioninfo_tool)" \
+            -icon="$project_root/internal/assets/icon.ico" -o="$generated_resource" \
+            -ver-major="$ver_major" -ver-minor="$ver_minor" -ver-patch="$ver_patch" -ver-build="$ver_build" \
+            -product-ver-major="$ver_major" -product-ver-minor="$ver_minor" -product-ver-patch="$ver_patch" -product-ver-build="$ver_build" \
+            -file-version="$numeric_version" -product-version="$numeric_version" \
+            -product-name=PicaGo -internal-name=PicaGo -original-name="$artifact" \
+            -description="PicaGo image viewer" -comment="Build $resolved_version"
     fi
 
-    artifact="PicaGo_${resolved_version}_${goos}_${goarch}${suffix}"
+    artifact="${artifact:-PicaGo_${resolved_version}_${goos}_${goarch}${suffix}}"
     echo " -> $target"
     if [[ "$goarch" == "amd64" ]]; then
         GOOS="$goos" GOARCH="$goarch" GOAMD64="$goamd64" CGO_ENABLED=0 \

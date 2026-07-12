@@ -180,23 +180,33 @@ Examples:
 
 ```powershell
 .\scripts\build.ps1 -Targets windows/amd64
+.\scripts\build.ps1 -Targets windows/amd64 -Goamd64 v3
 .\scripts\build.ps1 -Targets windows/amd64,linux/amd64,darwin/arm64
 .\scripts\build.ps1 -Version v1.3.0
 ```
+
+The `-Goamd64 v3` option builds a Windows AMD64 executable optimized for more
+recent processors. It can provide better performance, but the resulting binary
+will not run on older CPUs that do not support the required instruction set.
+Use the default `v1` for maximum compatibility. This option only applies to
+AMD64 targets and accepts `v1`, `v2`, `v3` or `v4`.
 
 Linux/Bash equivalents:
 
 ```bash
 ./scripts/build.sh --targets linux/amd64
+./scripts/build.sh --targets windows/amd64 --goamd64 v3
 ./scripts/build.sh --targets windows/amd64,linux/amd64,darwin/arm64
 ./scripts/build.sh --version v1.3.0
 ```
 
-For Windows builds, the script uses `rsrc`.
+For Windows builds, the script uses `goversioninfo` to embed the icon and the
+Windows file properties (`ProductName`, `FileDescription`, `FileVersion`,
+`ProductVersion` and `OriginalFilename`).
 Install it once with:
 
 ```powershell
-go install github.com/akavel/rsrc@latest
+go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
 ```
 
 The `internal/assets/icon.ico` file is used:

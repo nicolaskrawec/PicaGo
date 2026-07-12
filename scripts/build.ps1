@@ -15,13 +15,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Get-RsrcTool {
+function Get-VersionInfoTool {
     $gopath = (go env GOPATH).Trim()
-    $toolPath = Join-Path $gopath "bin\\rsrc.exe"
+    $toolPath = Join-Path $gopath "bin\\goversioninfo.exe"
     if (-not (Test-Path $toolPath)) {
-        throw "rsrc.exe introuvable. Installe-le avec: go install github.com/akavel/rsrc@latest"
+        throw "goversioninfo.exe introuvable. Installe-le avec: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest"
     }
     return $toolPath
+}
+
+function Get-WindowsVersion {
+    param([string]$ResolvedVersion)
+
+    $numbers = [regex]::Matches($ResolvedVersion, '\d+') | ForEach-Object { [int]$_.Value }
+    $parts = @(0, 0, 0, 0)
+    for ($i = 0; $i -lt [Math]::Min(4, $numbers.Count); $i++) {
+        $parts[$i] = [Math]::Min(65535, $numbers[$i])
+    }
+    return $parts
 }
 
 function Get-BuildVersion {
@@ -76,17 +87,29 @@ function Get-ArtifactName {
 function New-WindowsResource {
     param(
         [string]$ProjectRoot,
-        [string]$Goarch
+        [string]$Goarch,
+        [string]$ResolvedVersion,
+        [string]$OriginalFilename
     )
 
-    $rsrc = Get-RsrcTool
+    $tool = Get-VersionInfoTool
     $iconPath = Join-Path $ProjectRoot "internal\\assets\\icon.ico"
     if (-not (Test-Path $iconPath)) {
         throw "Icone introuvable: $iconPath"
     }
 
     $output = Join-Path $ProjectRoot "rsrc_windows_${Goarch}.syso"
-    & $rsrc -ico $iconPath -arch $Goarch -o $output
+    $parts = Get-WindowsVersion -ResolvedVersion $ResolvedVersion
+    $numericVersion = ($parts -join ".")
+    $arguments = @(
+        "-icon=$iconPath", "-o=$output",
+        "-ver-major=$($parts[0])", "-ver-minor=$($parts[1])", "-ver-patch=$($parts[2])", "-ver-build=$($parts[3])",
+        "-product-ver-major=$($parts[0])", "-product-ver-minor=$($parts[1])", "-product-ver-patch=$($parts[2])", "-product-ver-build=$($parts[3])",
+        "-file-version=$numericVersion", "-product-version=$numericVersion",
+        "-product-name=PicaGo", "-internal-name=PicaGo", "-original-name=$OriginalFilename",
+        "-description=PicaGo image viewer", "-comment=Build $ResolvedVersion"
+    )
+    & $tool @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Generation de la ressource Windows echouee pour $Goarch"
     }
@@ -121,14 +144,14 @@ foreach ($target in $Targets) {
     $outputPath = Join-Path (Join-Path $projectRoot $OutputDir) $artifact
 
     $ldflags = @($ldflagsBase)
+    $env:GOARCH = $goarch
     if ($goos -eq "windows") {
         $ldflags += @("-H", "windowsgui")
-        $generatedResources += New-WindowsResource -ProjectRoot $projectRoot -Goarch $goarch
+        $generatedResources += New-WindowsResource -ProjectRoot $projectRoot -Goarch $goarch -ResolvedVersion $resolvedVersion -OriginalFilename $artifact
     }
 
     Write-Host " -> $target"
     $env:GOOS = $goos
-    $env:GOARCH = $goarch
     $env:CGO_ENABLED = "0"
     if ($goarch -eq "amd64") {
         $env:GOAMD64 = $Goamd64
@@ -136,6 +159,17 @@ foreach ($target in $Targets) {
         Remove-Item Env:GOAMD64 -ErrorAction SilentlyContinue
     }
     go build -trimpath -buildvcs=false -ldflags ($ldflags -join " ") -o $outputPath .
+}
+
+function Get-WindowsVersion {
+    param([string]$ResolvedVersion)
+
+    $numbers = [regex]::Matches($ResolvedVersion, '\d+') | ForEach-Object { [int]$_.Value }
+    $parts = @(0, 0, 0, 0)
+    for ($i = 0; $i -lt [Math]::Min(4, $numbers.Count); $i++) {
+        $parts[$i] = [Math]::Min(65535, $numbers[$i])
+    }
+    return $parts
 }
 
 Remove-Item Env:GOOS -ErrorAction SilentlyContinue
