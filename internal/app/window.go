@@ -3,7 +3,6 @@ package app
 import (
 	stdimage "image"
 	"math"
-	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 
@@ -41,11 +40,12 @@ func (v *Viewer) resetFit() {
 		v.view = targetView
 		v.targetView = targetView
 	} else if v.animateInitialFit {
-		startView := targetView
-		startView.Zoom = targetView.Zoom * 0.01
-		startView.Alpha = 0
-		v.startViewAnimation(startView, targetView, 500*time.Millisecond, 120*time.Millisecond)
+		// The animated opening is disabled until its render-loop stall can be
+		// measured independently from fullscreen and image loading.
 		v.animateInitialFit = false
+		v.stopViewAnimation(true)
+		v.view = targetView
+		v.targetView = targetView
 	} else {
 		v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
 		v.targetView = targetView

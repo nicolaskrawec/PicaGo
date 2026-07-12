@@ -4,7 +4,6 @@ import (
 	stdimage "image"
 	"io/fs"
 	"math"
-	"os"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -96,7 +95,7 @@ func (v *Viewer) Update() error {
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
-		os.Exit(0)
+		return ebiten.Termination
 	}
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyR) {
@@ -194,7 +193,7 @@ func (v *Viewer) Update() error {
 			return nil
 		}
 		if pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance) {
-			os.Exit(0)
+			return ebiten.Termination
 		}
 
 		if !imageReady {
