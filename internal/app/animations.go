@@ -10,6 +10,33 @@ import (
 	"viewergo/internal/render"
 )
 
+const openingAnimationDuration = 500 * time.Millisecond
+
+func (v *Viewer) startOpeningAnimation() {
+	v.openingAnimationStart = time.Now()
+	v.openingAnimationActive = true
+}
+
+// openingDrawView is a presentation-only transform. Unlike resetFit and the
+// Z/R animations it never mutates the real view or its target.
+func (v *Viewer) openingDrawView(base render.View) render.View {
+	if !v.openingAnimationActive {
+		return base
+	}
+	elapsed := time.Since(v.openingAnimationStart)
+	if elapsed >= openingAnimationDuration {
+		v.openingAnimationActive = false
+		return base
+	}
+	t := float64(elapsed) / float64(openingAnimationDuration)
+	eased := 1 - math.Pow(1-t, 3)
+	zoomScale := lerpFloat(0.1, 1, eased)
+	base.Zoom *= zoomScale
+	visibility := math.Max(0, math.Min(1, (zoomScale-0.5)/0.5))
+	base.Alpha *= visibility
+	return base
+}
+
 func (v *Viewer) toggleFlipHorizontal() {
 	v.startMirrorAnimation(true)
 }
@@ -237,6 +264,9 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 	}
 
 	if v.viewAnimationActive {
+		return true
+	}
+	if v.openingAnimationActive {
 		return true
 	}
 

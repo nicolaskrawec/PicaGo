@@ -89,7 +89,7 @@ func (v *Viewer) promotePendingHighResImages() {
 		}
 		// Keep the initial full-resolution upload out of the animated fit
 		// period. The preview is sufficient while the image zooms in.
-		if pending.slot == asyncImageSlotA && v.initialPrefetchPending && (v.pendingResetFit || v.viewAnimationActive) {
+		if pending.slot == asyncImageSlotA && v.initialPrefetchPending && (v.pendingResetFit || v.viewAnimationActive || v.openingAnimationActive) {
 			continue
 		}
 		current := v.imageA

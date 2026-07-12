@@ -166,6 +166,8 @@ type Viewer struct {
 	viewAnimationFrom         render.View
 	viewAnimationTo           render.View
 	animateInitialFit         bool
+	openingAnimationActive    bool
+	openingAnimationStart     time.Time
 	rotationAnimationActive   bool
 	rotationAnimationStart    time.Time
 	rotationAnimationFrom     float64
@@ -268,18 +270,16 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	showShadow := v.showShadow
 
 	if v.pendingResetFit {
-		if v.borderlessMaximized && v.hasWindowedState && v.windowWidth == v.windowedWidth && v.windowHeight == v.windowedHeight {
-			return
-		}
 		v.resetFit()
 		v.pendingResetFit = false
 	}
+	drawView := v.openingDrawView(v.view)
 
 	switch v.mode {
 	case displayModeSingleA:
-		render.DrawImage(screen, v.imageA, v.windowWidth, v.windowHeight, v.view, showShadow)
+		render.DrawImage(screen, v.imageA, v.windowWidth, v.windowHeight, drawView, showShadow)
 	case displayModeSingleB:
-		render.DrawComparisonImage(screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, v.view, showShadow)
+		render.DrawComparisonImage(screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, drawView, showShadow)
 	case displayModeCompare:
 		v.restoreSliderAfterResize()
 		v.ensureSliderPosition()
@@ -291,7 +291,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 				v.imageB,
 				v.windowWidth,
 				v.windowHeight,
-				v.view,
+				drawView,
 				mouseX,
 				mouseY,
 				v.circleMaskDiameter,
@@ -304,7 +304,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 		} else {
 			if v.rotationAnimationActive || v.mirrorAnimationActive {
 				render.DrawCompareRotating(
-					screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, v.view,
+					screen, v.imageA, v.imageB, v.windowWidth, v.windowHeight, drawView,
 					v.rotationSplitLocalSide, v.rotationSplitLocalRatio, v.compareMaskAlpha, v.sliderOpacity, showShadow,
 				)
 			} else {
@@ -314,7 +314,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 					v.imageB,
 					v.windowWidth,
 					v.windowHeight,
-					v.view,
+					drawView,
 					v.slider.Position,
 					int(v.slider.Orientation),
 					v.showBlur,

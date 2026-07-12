@@ -40,12 +40,11 @@ func (v *Viewer) resetFit() {
 		v.view = targetView
 		v.targetView = targetView
 	} else if v.animateInitialFit {
-		// The animated opening is disabled until its render-loop stall can be
-		// measured independently from fullscreen and image loading.
 		v.animateInitialFit = false
 		v.stopViewAnimation(true)
 		v.view = targetView
 		v.targetView = targetView
+		v.startOpeningAnimation()
 	} else {
 		v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
 		v.targetView = targetView
