@@ -210,18 +210,21 @@ type Viewer struct {
 func Run(args []string) error {
 	cfg := loadConfig()
 	game := &Viewer{
-		mode:                  displayModeSingleA,
-		windowWidth:           640,
-		windowHeight:          480,
-		slider:                compare.Slider{Orientation: compare.OrientationVertical},
-		circleMaskDiameter:    defaultCircleMaskDiameterRatio,
-		compareMaskAlpha:      1,
-		lastCompareBorderAt:   time.Now(),
-		lastActivityAt:        time.Now(),
-		showShadow:            cfg.ShowShadow,
-		showHelp:              cfg.ShowDebug,
-		debugMode:             cfg.ShowDebug,
-		desktopBackground:     cfg.DesktopBackground,
+		mode:                displayModeSingleA,
+		windowWidth:         640,
+		windowHeight:        480,
+		slider:              compare.Slider{Orientation: compare.OrientationVertical},
+		circleMaskDiameter:  defaultCircleMaskDiameterRatio,
+		compareMaskAlpha:    1,
+		lastCompareBorderAt: time.Now(),
+		lastActivityAt:      time.Now(),
+		showShadow:          cfg.ShowShadow,
+		showHelp:            cfg.ShowDebug,
+		debugMode:           cfg.ShowDebug,
+		// A session started without an image can receive one later via drag and
+		// drop. Do not capture the desktop in that case: the native capture path
+		// is not safe during the subsequent fullscreen transition.
+		desktopBackground:     cfg.DesktopBackground && len(args) > 0,
 		syncSliderWithImage:   true,
 		animateInitialFit:     cfg.AnimateOnStart,
 		imageLoadResults:      make(chan asyncImageResult, 4),
