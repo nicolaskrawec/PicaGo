@@ -393,9 +393,21 @@ func drawCircularTexture(screen *ebiten.Image, texture *ebiten.Image, destRect s
 	if texture == nil || destRect.Empty() || radius <= 0 {
 		return
 	}
+	if shader, uniforms := circleDrawOptions(centerX, centerY, radius, gamma, exposure, contrast); shader != nil {
+		drawTexturedQuadShader(screen, texture, destRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, shader, uniforms)
+		return
+	}
 
-	left := maxInt(destRect.Min.X, int(math.Floor(centerX-radius)))
-	right := minInt(destRect.Max.X, int(math.Ceil(centerX+radius)))
+	// The image can be panned partly outside the viewport. Keep the scanline
+	// rectangles inside the actual screen bounds as well as inside the image;
+	// otherwise negative destination coordinates near the top/left edge can
+	// produce GPU interpolation artefacts.
+	visibleBounds := destRect.Intersect(screen.Bounds())
+	if visibleBounds.Empty() {
+		return
+	}
+	left := maxInt(visibleBounds.Min.X, int(math.Floor(centerX-radius)))
+	right := minInt(visibleBounds.Max.X, int(math.Ceil(centerX+radius)))
 	if right <= left {
 		return
 	}
@@ -417,9 +429,9 @@ func drawCircularTexture(screen *ebiten.Image, texture *ebiten.Image, destRect s
 		halfHeight := math.Sqrt(radius*radius - midX*midX)
 		visibleRect := stdimage.Rect(
 			x0,
-			maxInt(destRect.Min.Y, int(math.Ceil(centerY-halfHeight))),
+			maxInt(visibleBounds.Min.Y, int(math.Ceil(centerY-halfHeight))),
 			x1,
-			minInt(destRect.Max.Y, int(math.Floor(centerY+halfHeight))),
+			minInt(visibleBounds.Max.Y, int(math.Ceil(centerY+halfHeight))),
 		)
 		if !visibleRect.Empty() {
 			drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast)

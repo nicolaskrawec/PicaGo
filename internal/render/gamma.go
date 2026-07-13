@@ -15,6 +15,9 @@ package main
 var Gamma float
 var Exposure float
 var Contrast float
+var MaskEnabled float
+var MaskCenter vec2
+var MaskRadius float
 
 func sampleLinear(position vec2) vec4 {
 	origin := imageSrc0Origin()
@@ -35,12 +38,22 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 	fragment.rgb = (fragment.rgb - vec3(0.5)) * Contrast + vec3(0.5)
 	correction := vec3(1.0 / Gamma)
 	fragment.rgb = pow(fragment.rgb, correction)
+	if MaskEnabled > 0.5 && distance(position.xy, MaskCenter) > MaskRadius {
+		return vec4(0)
+	}
 	return fragment * color
 }
 `
 
 var gammaShaderOnce sync.Once
 var gammaShader *ebiten.Shader
+
+func ensureGammaShader() *ebiten.Shader {
+	gammaShaderOnce.Do(func() {
+		gammaShader, _ = ebiten.NewShader([]byte(gammaShaderSource))
+	})
+	return gammaShader
+}
 
 func gammaDrawOptions(gamma, exposure, contrast float64) (*ebiten.Shader, map[string]any) {
 	if gamma <= 0 {
@@ -50,16 +63,35 @@ func gammaDrawOptions(gamma, exposure, contrast float64) (*ebiten.Shader, map[st
 		return nil, nil
 	}
 
-	gammaShaderOnce.Do(func() {
-		gammaShader, _ = ebiten.NewShader([]byte(gammaShaderSource))
-	})
-	if gammaShader == nil {
+	shader := ensureGammaShader()
+	if shader == nil {
 		return nil, nil
 	}
-	return gammaShader, map[string]any{
-		"Gamma":    float32(clampGamma(gamma)),
-		"Exposure": float32(exposure),
-		"Contrast": float32(clampContrast(contrast)),
+	return shader, map[string]any{
+		"Gamma":       float32(clampGamma(gamma)),
+		"Exposure":    float32(exposure),
+		"Contrast":    float32(clampContrast(contrast)),
+		"MaskEnabled": float32(0),
+		"MaskCenter":  []float32{0, 0},
+		"MaskRadius":  float32(0),
+	}
+}
+
+func circleDrawOptions(centerX, centerY, radius, gamma, exposure, contrast float64) (*ebiten.Shader, map[string]any) {
+	shader := ensureGammaShader()
+	if shader == nil {
+		return nil, nil
+	}
+	if gamma <= 0 {
+		gamma = 1
+	}
+	return shader, map[string]any{
+		"Gamma":       float32(clampGamma(gamma)),
+		"Exposure":    float32(exposure),
+		"Contrast":    float32(clampContrast(contrast)),
+		"MaskEnabled": float32(1),
+		"MaskCenter":  []float32{float32(centerX), float32(centerY)},
+		"MaskRadius":  float32(radius),
 	}
 }
 
