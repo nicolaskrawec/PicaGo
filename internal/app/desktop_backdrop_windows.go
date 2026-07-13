@@ -49,9 +49,14 @@ type bitmapInfo struct {
 
 var (
 	user32              = syscall.NewLazyDLL("user32.dll")
+	kernel32            = syscall.NewLazyDLL("kernel32.dll")
 	gdi32               = syscall.NewLazyDLL("gdi32.dll")
 	dwmapi              = syscall.NewLazyDLL("dwmapi.dll")
+	getCurrentProcessID = kernel32.NewProc("GetCurrentProcessId")
+	enumWindows         = user32.NewProc("EnumWindows")
 	getForegroundWindow = user32.NewProc("GetForegroundWindow")
+	getWindowProcessID  = user32.NewProc("GetWindowThreadProcessId")
+	isWindowVisible     = user32.NewProc("IsWindowVisible")
 	showWindow          = user32.NewProc("ShowWindow")
 	setForegroundWindow = user32.NewProc("SetForegroundWindow")
 	monitorFromWindow   = user32.NewProc("MonitorFromWindow")
@@ -69,7 +74,14 @@ var (
 )
 
 func captureDesktopBackdrop() *ebiten.Image {
-	hwnd, _, _ := getForegroundWindow.Call()
+	hwnd := applicationWindow()
+	hideWindow := true
+	if hwnd == 0 {
+		// Capturing without hiding is less ideal because PicaGo may appear in
+		// the screenshot, but it is safer than touching another application.
+		hwnd, _, _ = getForegroundWindow.Call()
+		hideWindow = false
+	}
 	if hwnd == 0 {
 		return nil
 	}
@@ -89,13 +101,15 @@ func captureDesktopBackdrop() *ebiten.Image {
 		return nil
 	}
 
-	// Hide the foreground window so the capture contains what is behind PicaGo.
-	showWindow.Call(hwnd, swHide)
-	dwmFlush.Call()
-	defer func() {
-		showWindow.Call(hwnd, swShow)
-		setForegroundWindow.Call(hwnd)
-	}()
+	if hideWindow {
+		// Hide PicaGo so the capture contains what is behind it.
+		showWindow.Call(hwnd, swHide)
+		dwmFlush.Call()
+		defer func() {
+			showWindow.Call(hwnd, swShow)
+			setForegroundWindow.Call(hwnd)
+		}()
+	}
 
 	screenDC, _, _ := getDC.Call(0)
 	if screenDC == 0 {
@@ -142,4 +156,32 @@ func captureDesktopBackdrop() *ebiten.Image {
 		rgba.Pix[i+3] = 255
 	}
 	return ebiten.NewImageFromImage(rgba)
+}
+
+func applicationWindow() uintptr {
+	processID, _, _ := getCurrentProcessID.Call()
+	if foreground, _, _ := getForegroundWindow.Call(); foreground != 0 && windowBelongsToProcess(foreground, processID) {
+		return foreground
+	}
+
+	var found uintptr
+
+	callback := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
+		if visible, _, _ := isWindowVisible.Call(hwnd); visible == 0 {
+			return 1
+		}
+		if windowBelongsToProcess(hwnd, processID) {
+			found = hwnd
+			return 0
+		}
+		return 1
+	})
+	enumWindows.Call(callback, 0)
+	return found
+}
+
+func windowBelongsToProcess(hwnd, processID uintptr) bool {
+	var windowProcessID uint32
+	getWindowProcessID.Call(hwnd, uintptr(unsafe.Pointer(&windowProcessID)))
+	return uintptr(windowProcessID) == processID
 }
