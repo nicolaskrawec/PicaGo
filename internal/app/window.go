@@ -33,6 +33,7 @@ func (v *Viewer) resetFit() {
 		RotationAngle:  v.view.RotationAngle,
 		MirrorScaleX:   v.view.MirrorScaleX,
 		MirrorScaleY:   v.view.MirrorScaleY,
+		Gamma:          v.view.Gamma,
 	}
 	if v.skipNextFitAnimation {
 		v.skipNextFitAnimation = false

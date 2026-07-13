@@ -172,12 +172,14 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 	var oldLoaded *imagedata.LoadedImage
 	var oldDecoded *imagedata.DecodedImage
 	if resetView {
+		gamma := v.view.Gamma
 		if hasSavedView {
 			v.stopViewAnimation(true)
 			v.view = savedView
 			v.targetView = savedView
 		} else {
 			v.view = render.View{}
+			v.view.Gamma = gamma
 			v.targetView = v.view
 			v.stopViewAnimation(false)
 		}

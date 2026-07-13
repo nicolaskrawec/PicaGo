@@ -215,6 +215,7 @@ func (v *Viewer) animateView() {
 		v.view.FlipVertical = v.viewAnimationTo.FlipVertical
 		v.view.Rotation = v.viewAnimationTo.Rotation
 		v.view.RotationAngle = v.viewAnimationTo.RotationAngle
+		v.view.Gamma = lerpFloat(v.viewAnimationFrom.Gamma, v.viewAnimationTo.Gamma, eased)
 		v.targetView = v.viewAnimationTo
 		return
 	}
@@ -243,6 +244,12 @@ func (v *Viewer) animateView() {
 		v.view.Alpha = v.targetView.Alpha
 	} else {
 		v.view.Alpha += (v.targetView.Alpha - v.view.Alpha) * smoothing
+	}
+
+	if math.Abs(v.view.Gamma-v.targetView.Gamma) < 0.001 {
+		v.view.Gamma = v.targetView.Gamma
+	} else {
+		v.view.Gamma += (v.targetView.Gamma - v.view.Gamma) * smoothing
 	}
 }
 
@@ -341,7 +348,8 @@ func viewAlmostEqual(a, b render.View) bool {
 		a.Rotation == b.Rotation &&
 		math.Abs(a.RotationAngle-b.RotationAngle) < 0.001 &&
 		math.Abs(a.MirrorScaleX-b.MirrorScaleX) < 0.001 &&
-		math.Abs(a.MirrorScaleY-b.MirrorScaleY) < 0.001
+		math.Abs(a.MirrorScaleY-b.MirrorScaleY) < 0.001 &&
+		math.Abs(a.Gamma-b.Gamma) < 0.001
 }
 
 func (v *Viewer) startViewAnimation(from, to render.View, duration, delay time.Duration) {

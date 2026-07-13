@@ -7,7 +7,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha float64) {
+func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma float64) {
 	if texture == nil || destRect.Empty() {
 		return
 	}
@@ -49,10 +49,25 @@ func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.
 		options.GeoM.Translate(translateX, translateY)
 	}
 
+	shader, uniforms := gammaDrawOptions(gamma)
+	if shader != nil {
+		drawTexturedQuadShader(screen, texture, destRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, shader, uniforms)
+		return
+	}
 	screen.DrawImage(texture, options)
 }
 
-func drawTextureClipped(screen *ebiten.Image, texture *ebiten.Image, destRect, visibleRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha float64) {
+func drawTexturedQuadShader(screen, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha float64, shader *ebiten.Shader, uniforms map[string]any) {
+	points := [][2]int{{destRect.Min.X, destRect.Min.Y}, {destRect.Max.X, destRect.Min.Y}, {destRect.Min.X, destRect.Max.Y}, {destRect.Max.X, destRect.Max.Y}}
+	vertices := make([]ebiten.Vertex, 4)
+	for i, point := range points {
+		sourceX, sourceY := sourcePoint(point[0], point[1], destRect, texture.Bounds(), flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY)
+		vertices[i] = ebiten.Vertex{DstX: float32(point[0]), DstY: float32(point[1]), SrcX: float32(sourceX), SrcY: float32(sourceY), ColorR: 1, ColorG: 1, ColorB: 1, ColorA: float32(clampAlpha(alpha))}
+	}
+	screen.DrawTrianglesShader(vertices, []uint16{0, 1, 2, 1, 2, 3}, shader, &ebiten.DrawTrianglesShaderOptions{Images: [4]*ebiten.Image{texture}, Uniforms: uniforms})
+}
+
+func drawTextureClipped(screen *ebiten.Image, texture *ebiten.Image, destRect, visibleRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma float64) {
 	if texture == nil || destRect.Empty() || visibleRect.Empty() {
 		return
 	}
@@ -98,7 +113,12 @@ func drawTextureClipped(screen *ebiten.Image, texture *ebiten.Image, destRect, v
 	options := &ebiten.DrawTrianglesOptions{
 		Filter: ebiten.FilterLinear,
 	}
-	screen.DrawTriangles(vertices, indices, texture, options)
+	shader, uniforms := gammaDrawOptions(gamma)
+	if shader != nil {
+		screen.DrawTrianglesShader(vertices, indices, shader, &ebiten.DrawTrianglesShaderOptions{Images: [4]*ebiten.Image{texture}, Uniforms: uniforms})
+	} else {
+		screen.DrawTriangles(vertices, indices, texture, options)
+	}
 }
 
 func clampBoundary(value, min, max int) int {

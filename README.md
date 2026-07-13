@@ -119,6 +119,10 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `B`: toggle the soft/blurred comparison edge.
 - `L`: toggle slider sync with image movement.
 - `S`: toggle the image shadow.
+- `Shift + mouse wheel`: adjust the gamma correction of the displayed image;
+  in comparison mode, both images are adjusted together.
+- `Ctrl + Shift + mouse wheel` in circular comparison mode: resize the circular
+  mask.
 - Hold `1`: show image A only.
 - Hold `2`: show image B only.
 - `Esc`: quit.
