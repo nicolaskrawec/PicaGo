@@ -34,6 +34,14 @@ func sampleLinear(position vec2) vec4 {
 
 func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 	fragment := sampleLinear(texCoord)
+	// Ebiten textures use premultiplied alpha. Work on straight RGB while
+	// applying the image adjustments, then premultiply the result again for
+	// the final composition. Without this final premultiplication, lowering
+	// B's opacity leaves its corrected RGB too bright.
+	sourceAlpha := fragment.a
+	if sourceAlpha > 0.0 {
+		fragment.rgb /= vec3(sourceAlpha)
+	}
 	fragment.rgb *= exp2(vec3(Exposure))
 	fragment.rgb = (fragment.rgb - vec3(0.5)) * Contrast + vec3(0.5)
 	correction := vec3(1.0 / Gamma)
@@ -41,7 +49,8 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 	if MaskEnabled > 0.5 && distance(position.xy, MaskCenter) > MaskRadius {
 		return vec4(0)
 	}
-	return fragment * color
+	alpha := sourceAlpha * color.a
+	return vec4(fragment.rgb * color.rgb * alpha, alpha)
 }
 `
 
