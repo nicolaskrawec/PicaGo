@@ -8,12 +8,27 @@ import (
 )
 
 const gammaShaderSource = `
+//kage:unit pixels
+
 package main
 
 var Gamma float
 
+func sampleLinear(position vec2) vec4 {
+	origin := imageSrc0Origin()
+	size := imageSrc0Size()
+	last := origin + size - vec2(1)
+	position = position - vec2(0.5)
+	base := clamp(floor(position), origin, last)
+	next := min(base+vec2(1), last)
+	weight := fract(position)
+	top := mix(imageSrc0At(base), imageSrc0At(vec2(next.x, base.y)), weight.x)
+	bottom := mix(imageSrc0At(vec2(base.x, next.y)), imageSrc0At(next), weight.x)
+	return mix(top, bottom, weight.y)
+}
+
 func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
-	fragment := imageSrc0At(texCoord)
+	fragment := sampleLinear(texCoord)
 	correction := vec3(1.0 / Gamma)
 	fragment.rgb = pow(fragment.rgb, correction)
 	return fragment * color

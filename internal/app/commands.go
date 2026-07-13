@@ -100,6 +100,7 @@ func (v *Viewer) Update() error {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyR) {
 		v.resetFit()
+		v.showCenterInfo("Zoom %d%%", int(math.Round(v.targetView.Zoom*100)))
 	}
 	// On AZERTY, the physical key labelled Z can be reported as KeyW by
 	// Ebiten/GLFW (the key constants follow the US layout).

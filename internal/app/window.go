@@ -61,6 +61,7 @@ func (v *Viewer) toggleZoom100Fit(mouseX, mouseY float64) {
 
 	if math.Abs(v.view.Zoom-1) < 0.001 {
 		v.resetFit()
+		v.showCenterInfo("Zoom %d%%", int(math.Round(v.targetView.Zoom*100)))
 		return
 	}
 
@@ -89,6 +90,7 @@ func (v *Viewer) toggleZoom100Fit(mouseX, mouseY float64) {
 	v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
 	v.targetView = targetView
 	v.ensureSliderPosition()
+	v.showCenterInfo("Zoom %d%%", int(math.Round(targetView.Zoom*100)))
 }
 
 func (v *Viewer) restoreWindow() {

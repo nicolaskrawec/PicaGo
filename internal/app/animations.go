@@ -145,6 +145,7 @@ func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
 	v.targetView.OffsetY = mouseY - centerY - (worldY-imageCenterY)*newZoom
 	v.targetView.Zoom = newZoom
 	v.targetView.Alpha = 1
+	v.showCenterInfo("Zoom %d%%", int(math.Round(newZoom*100)))
 }
 
 func (v *Viewer) animateView() {
@@ -219,7 +220,6 @@ func (v *Viewer) animateView() {
 		v.targetView = v.viewAnimationTo
 		return
 	}
-
 	const smoothing = 0.2
 
 	if math.Abs(v.view.Zoom-v.targetView.Zoom) < 0.001 {
@@ -271,6 +271,9 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 	}
 
 	if v.viewAnimationActive {
+		return true
+	}
+	if v.centerInfoText != "" && time.Now().Before(v.centerInfoUntil) {
 		return true
 	}
 	if v.openingAnimationActive {

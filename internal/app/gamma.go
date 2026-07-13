@@ -15,4 +15,5 @@ func (v *Viewer) adjustGamma(wheelDelta float64) {
 	gamma = clampFloat64(gamma+wheelDelta*gammaStep, minGamma, maxGamma)
 	v.view.Gamma = gamma
 	v.targetView.Gamma = gamma
+	v.showCenterInfo("Gamma %.2f", gamma)
 }

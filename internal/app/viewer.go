@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"image/color"
 	"math"
 	"path/filepath"
@@ -199,6 +200,9 @@ type Viewer struct {
 	loadError                 string
 	desktopBackdrop           *ebiten.Image
 	desktopBackground         bool
+	centerInfoText            string
+	centerInfoUntil           time.Time
+	centerInfoTexture         *ebiten.Image
 }
 
 func Run(args []string) error {
@@ -349,11 +353,72 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	if v.showHelp {
 		ebitenutil.DebugPrintAt(screen, v.helpText(), 10, 10)
 	}
+	v.drawCenterInfo(screen)
 	if v.loadingImageName != "" {
 		ebitenutil.DebugPrintAt(screen, "Loading "+v.loadingImageName, 10, v.windowHeight-22)
 	} else if v.loadError != "" {
 		ebitenutil.DebugPrintAt(screen, "Load failed: "+v.loadError, 10, v.windowHeight-22)
 	}
+}
+
+func (v *Viewer) showCenterInfo(format string, value any) {
+	v.centerInfoText = fmt.Sprintf(format, value)
+	v.centerInfoUntil = time.Now().Add(900 * time.Millisecond)
+	if v.centerInfoTexture != nil {
+		v.centerInfoTexture.Deallocate()
+	}
+	textWidth := maxInt(1, len(v.centerInfoText)*6)
+	boxWidth := textWidth + 20
+	boxHeight := 24
+	v.centerInfoTexture = ebiten.NewImage(boxWidth, boxHeight)
+	drawCenterInfoFrame(v.centerInfoTexture, float32(boxWidth), float32(boxHeight))
+	ebitenutil.DebugPrintAt(v.centerInfoTexture, v.centerInfoText, 10, 4)
+}
+
+func (v *Viewer) drawCenterInfo(screen *ebiten.Image) {
+	if v.centerInfoText == "" || v.centerInfoTexture == nil {
+		return
+	}
+	remaining := time.Until(v.centerInfoUntil)
+	if remaining <= 0 {
+		return
+	}
+
+	const textHeight = 12
+	const fadeDuration = 250 * time.Millisecond
+	textWidth := len(v.centerInfoText) * 6
+	boxWidth := float32(textWidth + 20)
+	boxHeight := float32(textHeight + 12)
+	left := float32(screen.Bounds().Dx()-int(boxWidth)) / 2
+	top := float32(screen.Bounds().Dy()-int(boxHeight)) / 2
+	fade := 1.0
+	if remaining < fadeDuration {
+		fade = float64(remaining) / float64(fadeDuration)
+	}
+	textOptions := &ebiten.DrawImageOptions{}
+	textOptions.GeoM.Translate(float64(left), float64(top))
+	textOptions.ColorScale.ScaleAlpha(float32(fade))
+	screen.DrawImage(v.centerInfoTexture, textOptions)
+}
+
+func drawCenterInfoFrame(dst *ebiten.Image, width, height float32) {
+	radius := float32(6)
+	right := width
+	bottom := height
+	path := &vector.Path{}
+	path.MoveTo(radius, 0)
+	path.LineTo(right-radius, 0)
+	path.Arc(right-radius, radius, radius, -math.Pi/2, 0, vector.Clockwise)
+	path.LineTo(right, bottom-radius)
+	path.Arc(right-radius, bottom-radius, radius, 0, math.Pi/2, vector.Clockwise)
+	path.LineTo(radius, bottom)
+	path.Arc(radius, bottom-radius, radius, math.Pi/2, math.Pi, vector.Clockwise)
+	path.LineTo(0, radius)
+	path.Arc(radius, radius, radius, math.Pi, math.Pi*1.5, vector.Clockwise)
+	path.Close()
+	options := &vector.DrawPathOptions{AntiAlias: true}
+	options.ColorScale.ScaleWithColor(color.NRGBA{64, 64, 64, 255})
+	vector.FillPath(dst, path, &vector.FillOptions{}, options)
 }
 
 func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTopLeft, showTopRight, showBottomLeft bool) {
