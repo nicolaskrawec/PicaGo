@@ -59,6 +59,7 @@ func gammaDrawOptions(gamma, exposure, contrast float64) (*ebiten.Shader, map[st
 	if gamma <= 0 {
 		gamma = 1
 	}
+	contrast = clampContrast(contrast)
 	if math.Abs(gamma-1) < 0.0001 && math.Abs(exposure) < 0.0001 && math.Abs(contrast-1) < 0.0001 {
 		return nil, nil
 	}
@@ -70,7 +71,7 @@ func gammaDrawOptions(gamma, exposure, contrast float64) (*ebiten.Shader, map[st
 	return shader, map[string]any{
 		"Gamma":       float32(clampGamma(gamma)),
 		"Exposure":    float32(exposure),
-		"Contrast":    float32(clampContrast(contrast)),
+		"Contrast":    float32(contrast),
 		"MaskEnabled": float32(0),
 		"MaskCenter":  []float32{0, 0},
 		"MaskRadius":  float32(0),
