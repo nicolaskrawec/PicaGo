@@ -123,6 +123,26 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - Hold `2`: show image B only.
 - `Esc`: quit.
 
+## Configuration
+
+The Windows installer includes `PicaGo.json` next to the executable. The file
+can be edited while PicaGo is closed:
+
+```json
+{
+  "desktopBackground": true,
+  "showShadow": true,
+  "animateOnStart": true
+}
+```
+
+- `desktopBackground`: use the captured Windows desktop as the fullscreen
+  background; set it to `false` to use the gray background.
+- `showShadow`: show the image shadow.
+- `animateOnStart`: animate the initial image fit when opening PicaGo.
+
+If the file is missing, PicaGo creates it with these default values.
+
 ## Supported Formats
 
 Currently supported formats:
@@ -237,6 +257,7 @@ PicaGo can be packaged as a Windows installer with:
 This script:
 
 - builds `dist/PicaGo.exe`
+- copies the default `PicaGo.json` configuration next to the executable
 - compiles an Inno Setup installer into `dist/installer`
 - installs the app with the embedded icon
 - registers PicaGo as a handler for supported image formats

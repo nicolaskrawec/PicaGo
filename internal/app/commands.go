@@ -324,7 +324,7 @@ func (v *Viewer) Update() error {
 		} else if v.mode == displayModeCompare && v.compareMask == compareMaskCircle && v.imageB != nil && imageReady && shiftPressed {
 			v.adjustCircleMaskDiameter(wheelDelta)
 		} else {
-			v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.3, wheelDelta))
+			v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.15, wheelDelta))
 		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {

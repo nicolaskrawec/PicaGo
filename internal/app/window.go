@@ -155,6 +155,11 @@ func (v *Viewer) enterBorderlessMaximized() {
 	v.invalidateSavedImageZooms()
 
 	v.captureWindowedState()
+	// Capture the desktop only once. Reusing the GPU texture avoids calling
+	// the native GDI capture path again after a fullscreen/restore cycle.
+	if v.desktopBackdrop == nil && v.desktopBackground {
+		v.desktopBackdrop = captureDesktopBackdrop()
+	}
 	v.prepareSliderRestore()
 	v.prepareViewportRebase()
 

@@ -84,6 +84,12 @@ if (-not (Test-Path $stableExe)) {
     throw "Binaire Windows introuvable: $stableExe"
 }
 
+$configTemplate = Join-Path $projectRoot "PicaGo.json"
+if (-not (Test-Path $configTemplate)) {
+    throw "Fichier de configuration introuvable: $configTemplate"
+}
+Copy-Item -LiteralPath $configTemplate -Destination (Join-Path $outputDirAbsolute "PicaGo.json") -Force
+
 New-Item -ItemType Directory -Force -Path $installerOutputAbsolute | Out-Null
 
 $iscc = Get-InnoSetupCompiler

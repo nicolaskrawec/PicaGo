@@ -197,9 +197,12 @@ type Viewer struct {
 	invalidatedZoomStates     map[string]bool
 	loadingImageName          string
 	loadError                 string
+	desktopBackdrop           *ebiten.Image
+	desktopBackground         bool
 }
 
 func Run(args []string) error {
+	cfg := loadConfig()
 	game := &Viewer{
 		mode:                  displayModeSingleA,
 		windowWidth:           640,
@@ -209,9 +212,10 @@ func Run(args []string) error {
 		compareMaskAlpha:      1,
 		lastCompareBorderAt:   time.Now(),
 		lastActivityAt:        time.Now(),
-		showShadow:            true,
+		showShadow:            cfg.ShowShadow,
+		desktopBackground:     cfg.DesktopBackground,
 		syncSliderWithImage:   true,
-		animateInitialFit:     true,
+		animateInitialFit:     cfg.AnimateOnStart,
 		imageLoadResults:      make(chan asyncImageResult, 4),
 		prefetchResults:       make(chan prefetchedImageResult, 4),
 		prefetchInFlight:      make(map[string]bool),
@@ -233,7 +237,7 @@ func Run(args []string) error {
 		ebiten.SetWindowTitle(windowTitle(filepath.Base(args[0]) + " loading..."))
 		ebiten.SetWindowSize(1280, 720)
 		game.pendingInitialBorderless = true
-		game.startAsyncImageFileLoad(args[0], asyncImageSlotA, true, true)
+		game.startAsyncImageFileLoad(args[0], asyncImageSlotA, true, cfg.AnimateOnStart)
 	}
 
 	if err := ebiten.RunGame(game); err != nil {
@@ -244,6 +248,12 @@ func Run(args []string) error {
 
 func (v *Viewer) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{127, 127, 127, 255})
+	if v.borderlessMaximized {
+		drawDesktopBackdrop(screen, v.desktopBackdrop)
+	}
+	if v.borderlessMaximized && v.desktopBackdrop != nil {
+		vector.FillRect(screen, 0, 0, float32(screen.Bounds().Dx()), float32(screen.Bounds().Dy()), color.RGBA{0, 0, 0, 160}, false)
+	}
 	newWidth, newHeight := screen.Bounds().Dx(), screen.Bounds().Dy()
 	// A native maximize/restore (the window button) can change the backbuffer
 	// size before Update gets a chance to enter borderless fullscreen. Capture
