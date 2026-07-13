@@ -146,6 +146,7 @@ can be edited while PicaGo is closed:
   background; set it to `false` to use the gray background.
 - `showShadow`: show the image shadow.
 - `animateOnStart`: animate the initial image fit when opening PicaGo.
+- `showDebug`: show the debug/help overlay at startup; `F1` toggles it afterward.
 
 If the file is missing, PicaGo creates it with these default values.
 

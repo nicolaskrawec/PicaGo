@@ -95,6 +95,8 @@ func clampFloat64(value, minValue, maxValue float64) float64 {
 }
 
 func (v *Viewer) helpText() string {
+	return v.helpTextCategorized(true)
+
 	fileA := "A"
 	if v.imageA != nil && v.imageA.FileName != "" {
 		fileA = v.imageA.FileName
@@ -124,6 +126,100 @@ func (v *Viewer) helpText() string {
 
 	rotation := v.view.Rotation * 90
 	return "PicaGo " + Version + " - NkSoft\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nRotation : " + strconv.Itoa(rotation) + " deg\nMÃ©moire : " + v.memoryStatusText() + "\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nShift+gauche/droite : miroir horizontal\nShift+haut/bas : miroir vertical\nCtrl+gauche : rotation anti-horaire\nCtrl+droite : rotation horaire\nMolette : zoom image\nShift+molette : zoom masque cercle\nCtrl+molette : opacité masque\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+}
+
+func (v *Viewer) helpTextCompact() string {
+	return v.helpTextCategorized(false)
+
+	fileA := "A"
+	if v.imageA != nil && v.imageA.FileName != "" {
+		fileA = v.imageA.FileName
+	}
+	fileB := "aucune"
+	if v.imageB != nil && v.imageB.FileName != "" {
+		fileB = v.imageB.FileName
+	}
+	syncMode := "off"
+	if v.syncSliderWithImage {
+		syncMode = "on"
+	}
+	shadowMode := "off"
+	if v.showShadow {
+		shadowMode = "on"
+	}
+	blurMode := "off"
+	if v.showBlur {
+		blurMode = "on"
+	}
+	return "PicaGo " + Version + " - NkSoft\nF1 aide\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nShift+gauche/droite : miroir horizontal\nShift+haut/bas : miroir vertical\nCtrl+gauche/droite : rotation\nMolette : zoom image\nShift+molette : gamma image\nAlt+molette : exposition\nCtrl+Alt+molette : contraste\nCtrl+molette : opacité masque\nCtrl+Shift+molette : taille masque cercle\nB : blur cercle " + blurMode + "\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+}
+
+func (v *Viewer) helpTextCategorized(debug bool) string {
+	fileA := "A"
+	if v.imageA != nil && v.imageA.FileName != "" {
+		fileA = v.imageA.FileName
+	}
+	fileB := "aucune"
+	if v.imageB != nil && v.imageB.FileName != "" {
+		fileB = v.imageB.FileName
+	}
+	syncMode := "off"
+	if v.syncSliderWithImage {
+		syncMode = "on"
+	}
+	shadowMode := "off"
+	if v.showShadow {
+		shadowMode = "on"
+	}
+	blurMode := "off"
+	if v.showBlur {
+		blurMode = "on"
+	}
+
+	lines := []string{"PicaGo " + Version + " - NkSoft"}
+	if debug {
+		lines = append(lines,
+			"Zoom actuel : "+strconv.Itoa(int(math.Round(v.view.Zoom*100)))+"%",
+			"Rotation actuelle : "+strconv.Itoa(v.view.Rotation*90)+" deg",
+			"Mémoire : "+v.memoryStatusText(),
+			"Cache : "+v.prefetchStatusText(),
+		)
+	}
+	lines = append(lines,
+		"",
+		"GEOMETRIE",
+		"Molette : zoom image",
+		"Haut / bas : zoom image",
+		"Z / W : zoom 100% / maxi",
+		"R : ajuster à la fenêtre",
+		"Ctrl+gauche/droite : rotation",
+		"Shift+gauche/droite : miroir horizontal",
+		"Shift+haut/bas : miroir vertical",
+		"",
+		"AJUSTEMENTS",
+		"Shift+molette : gamma",
+		"Alt+molette : exposition / luminosité",
+		"Ctrl+Alt+molette : contraste",
+		"",
+		"COMPARAISON",
+		"C : masque circulaire / inversion",
+		"H / V : split horizontal / vertical",
+		"Ctrl+molette : opacité du masque",
+		"Ctrl+Shift+molette : taille du masque circulaire",
+		"B : flou du cercle "+blurMode,
+		"L : synchronisation du slider "+syncMode,
+		"",
+		"DIVERS",
+		"S : ombre "+shadowMode,
+		"F11 : plein écran",
+		"Esc : quitter",
+		"",
+		"NAVIGATION",
+		"gauche / droite : image précédente / suivante",
+		"1 : "+fileA,
+		"2 : "+fileB,
+	)
+	return strings.Join(lines, "\n")
 }
 
 func (v *Viewer) memoryStatusText() string {

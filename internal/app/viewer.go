@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"math"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -200,6 +201,7 @@ type Viewer struct {
 	loadError                 string
 	desktopBackdrop           *ebiten.Image
 	desktopBackground         bool
+	debugMode                 bool
 	centerInfoText            string
 	centerInfoUntil           time.Time
 	centerInfoTexture         *ebiten.Image
@@ -217,6 +219,8 @@ func Run(args []string) error {
 		lastCompareBorderAt:   time.Now(),
 		lastActivityAt:        time.Now(),
 		showShadow:            cfg.ShowShadow,
+		showHelp:              cfg.ShowDebug,
+		debugMode:             cfg.ShowDebug,
 		desktopBackground:     cfg.DesktopBackground,
 		syncSliderWithImage:   true,
 		animateInitialFit:     cfg.AnimateOnStart,
@@ -351,7 +355,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	)
 
 	if v.showHelp {
-		ebitenutil.DebugPrintAt(screen, v.helpText(), 10, 10)
+		v.drawHelpOverlay(screen)
 	}
 	v.drawCenterInfo(screen)
 	if v.loadingImageName != "" {
@@ -401,21 +405,54 @@ func (v *Viewer) drawCenterInfo(screen *ebiten.Image) {
 	screen.DrawImage(v.centerInfoTexture, textOptions)
 }
 
-func drawCenterInfoFrame(dst *ebiten.Image, width, height float32) {
-	radius := float32(6)
-	right := width
-	bottom := height
+func (v *Viewer) drawHelpOverlay(screen *ebiten.Image) {
+	text := v.helpText()
+	if !v.debugMode {
+		text = v.helpTextCompact()
+	}
+	lines := strings.Split(text, "\n")
+	maxLineWidth := 0
+	for _, line := range lines {
+		maxLineWidth = maxInt(maxLineWidth, len(line)*6)
+	}
+
+	const paddingX = 10
+	const paddingY = 8
+	const lineHeight = 16
+	boxWidth := float32(maxLineWidth + paddingX*2)
+	boxHeight := float32(len(lines)*lineHeight + paddingY*2)
+	left, top := float32(6), float32(6)
+	path := roundedRectPath(left, top, boxWidth, boxHeight, 8)
+
+	fillOptions := &vector.DrawPathOptions{AntiAlias: true}
+	fillOptions.ColorScale.ScaleWithColor(color.NRGBA{48, 48, 48, 190})
+	vector.FillPath(screen, path, &vector.FillOptions{}, fillOptions)
+
+	borderOptions := &vector.DrawPathOptions{AntiAlias: true}
+	borderOptions.ColorScale.ScaleWithColor(color.NRGBA{220, 220, 220, 190})
+	vector.StrokePath(screen, path, &vector.StrokeOptions{Width: 1.5}, borderOptions)
+	ebitenutil.DebugPrintAt(screen, text, int(left)+paddingX, int(top)+paddingY)
+}
+
+func roundedRectPath(left, top, width, height, radius float32) *vector.Path {
+	right := left + width
+	bottom := top + height
 	path := &vector.Path{}
-	path.MoveTo(radius, 0)
-	path.LineTo(right-radius, 0)
-	path.Arc(right-radius, radius, radius, -math.Pi/2, 0, vector.Clockwise)
+	path.MoveTo(left+radius, top)
+	path.LineTo(right-radius, top)
+	path.Arc(right-radius, top+radius, radius, -math.Pi/2, 0, vector.Clockwise)
 	path.LineTo(right, bottom-radius)
 	path.Arc(right-radius, bottom-radius, radius, 0, math.Pi/2, vector.Clockwise)
-	path.LineTo(radius, bottom)
-	path.Arc(radius, bottom-radius, radius, math.Pi/2, math.Pi, vector.Clockwise)
-	path.LineTo(0, radius)
-	path.Arc(radius, radius, radius, math.Pi, math.Pi*1.5, vector.Clockwise)
+	path.LineTo(left+radius, bottom)
+	path.Arc(left+radius, bottom-radius, radius, math.Pi/2, math.Pi, vector.Clockwise)
+	path.LineTo(left, top+radius)
+	path.Arc(left+radius, top+radius, radius, math.Pi, math.Pi*1.5, vector.Clockwise)
 	path.Close()
+	return path
+}
+
+func drawCenterInfoFrame(dst *ebiten.Image, width, height float32) {
+	path := roundedRectPath(0, 0, width, height, 6)
 	options := &vector.DrawPathOptions{AntiAlias: true}
 	options.ColorScale.ScaleWithColor(color.NRGBA{64, 64, 64, 255})
 	vector.FillPath(dst, path, &vector.FillOptions{}, options)

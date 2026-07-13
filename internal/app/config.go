@@ -10,6 +10,7 @@ type config struct {
 	DesktopBackground bool `json:"desktopBackground"`
 	ShowShadow        bool `json:"showShadow"`
 	AnimateOnStart    bool `json:"animateOnStart"`
+	ShowDebug         bool `json:"showDebug"`
 }
 
 func defaultConfig() config {
@@ -17,6 +18,7 @@ func defaultConfig() config {
 		DesktopBackground: true,
 		ShowShadow:        true,
 		AnimateOnStart:    true,
+		ShowDebug:         false,
 	}
 }
 
