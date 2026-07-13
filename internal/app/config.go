@@ -9,20 +9,22 @@ import (
 const appConfigDirectory = "PicaGo"
 
 type config struct {
-	DesktopBackground bool   `json:"desktopBackground"`
-	Background        string `json:"background"`
-	ShowShadow        bool   `json:"showShadow"`
-	AnimateOnStart    bool   `json:"animateOnStart"`
-	ShowDebug         bool   `json:"showDebug"`
+	DesktopBackground        bool   `json:"desktopBackground"`
+	Background               string `json:"background"`
+	ShowShadow               bool   `json:"showShadow"`
+	SlideshowIntervalSeconds int    `json:"slideshowIntervalSeconds"`
+	AnimateOnStart           bool   `json:"animateOnStart"`
+	ShowDebug                bool   `json:"showDebug"`
 }
 
 func defaultConfig() config {
 	return config{
-		DesktopBackground: true,
-		Background:        "desktop",
-		ShowShadow:        true,
-		AnimateOnStart:    true,
-		ShowDebug:         false,
+		DesktopBackground:        true,
+		Background:               "desktop",
+		ShowShadow:               true,
+		SlideshowIntervalSeconds: 1,
+		AnimateOnStart:           true,
+		ShowDebug:                false,
 	}
 }
 

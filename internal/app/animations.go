@@ -266,6 +266,9 @@ func (v *Viewer) animateView() {
 }
 
 func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed bool) bool {
+	if v.slideshowPlaying {
+		return true
+	}
 	if mouseMoved || leftMousePressed || rightMousePressed || v.draggingImage || v.draggingSlider || v.restoreClickPending {
 		return true
 	}
@@ -321,6 +324,7 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 		ebiten.IsKeyPressed(ebiten.KeyV) ||
 		ebiten.IsKeyPressed(ebiten.KeyL) ||
 		ebiten.IsKeyPressed(ebiten.KeyS) ||
+		ebiten.IsKeyPressed(ebiten.KeyP) ||
 		ebiten.IsKeyPressed(ebiten.KeyB) ||
 		ebiten.IsKeyPressed(ebiten.KeyF11) ||
 		ebiten.IsKeyPressed(ebiten.KeyC) ||

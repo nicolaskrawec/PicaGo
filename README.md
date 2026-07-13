@@ -122,6 +122,7 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `B`: cycle the background. In fullscreen, this cycles desktop, gray, black
   and white when the desktop background is available. In a window, or without
   desktop capture, it cycles gray, black and white.
+- `P`: play/pause a looping slideshow of the images in the current folder.
 - `L`: toggle slider sync with image movement.
 - `S`: toggle the image shadow.
 - `Shift + mouse wheel`: adjust the gamma correction of the displayed image;
@@ -147,6 +148,7 @@ beside the executable is imported automatically on first launch.
   "desktopBackground": true,
   "background": "desktop",
   "showShadow": true,
+  "slideshowIntervalSeconds": 1,
   "animateOnStart": true
 }
 ```
@@ -156,6 +158,7 @@ beside the executable is imported automatically on first launch.
   white backgrounds. Set it to `false` to disable desktop capture.
 - `background`: last selected background: `desktop`, `gray`, `black` or `white`.
 - `showShadow`: show the image shadow.
+- `slideshowIntervalSeconds`: number of seconds between two slideshow images.
 - `animateOnStart`: animate the initial image fit when opening PicaGo.
 - `showDebug`: show the debug/help overlay at startup; `F1` toggles it afterward.
 

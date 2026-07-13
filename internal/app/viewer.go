@@ -165,6 +165,8 @@ type Viewer struct {
 	lastImageClickX           int
 	lastImageClickY           int
 	lastActivityAt            time.Time
+	slideshowPlaying          bool
+	nextSlideshowAt           time.Time
 	idleFPSMode               bool
 	idleMouseTracked          bool
 	idleMouseX                int

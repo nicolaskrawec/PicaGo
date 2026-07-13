@@ -23,17 +23,37 @@ func (v *Viewer) loadAdjacentImage(step int) error {
 	}
 
 	nextPath := images[nextIndex]
+	v.loadNavigationImage(nextPath)
+	return nil
+}
+
+func (v *Viewer) loadNextSlideshowImage() error {
+	images, currentIndex, err := v.navigationImagePathsForSlideshow()
+	if err != nil || len(images) < 2 || currentIndex < 0 {
+		return err
+	}
+	v.loadNavigationImage(images[(currentIndex+1)%len(images)])
+	return nil
+}
+
+func (v *Viewer) navigationImagePathsForSlideshow() ([]string, int, error) {
+	if v.imageA == nil || v.imageA.FilePath == "" {
+		return nil, -1, nil
+	}
+	return v.navigationImagePaths(v.imageA.FilePath)
+}
+
+func (v *Viewer) loadNavigationImage(nextPath string) {
 	if decoded := v.takePrefetchedImage(nextPath); decoded != nil {
 		// Invalidate an older asynchronous navigation result before applying
 		// the cached image immediately.
 		v.trackPendingImageLoad(asyncImageSlotA, 0)
 		v.loadingImageName = ""
 		v.applyDecodedImage(asyncImageSlotA, decoded, true, false, true)
-		return nil
+		return
 	}
 
 	v.startAsyncImageFileLoad(nextPath, asyncImageSlotA, true, false)
-	return nil
 }
 
 func (v *Viewer) navigationImagePaths(filePath string) ([]string, int, error) {

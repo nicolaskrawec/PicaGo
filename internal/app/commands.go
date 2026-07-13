@@ -108,6 +108,9 @@ func (v *Viewer) Update() error {
 		zoomMouseX, zoomMouseY := ebiten.CursorPosition()
 		v.toggleZoom100Fit(float64(zoomMouseX), float64(zoomMouseY))
 	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyP) {
+		v.toggleSlideshow(now)
+	}
 	if !ebiten.IsKeyPressed(ebiten.KeyShift) && !ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
 		_ = v.loadAdjacentImage(-1)
 	}
@@ -361,6 +364,7 @@ func (v *Viewer) Update() error {
 	v.updateSoloPreview(ebiten.IsKeyPressed(ebiten.Key1), ebiten.IsKeyPressed(ebiten.Key2))
 
 	v.updateCursorShape(mouseX, mouseY, imageRect, imageReady)
+	v.updateSlideshow(now)
 	v.updateFramePacing(now, v.shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed))
 
 	return nil

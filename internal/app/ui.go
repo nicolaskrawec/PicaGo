@@ -196,6 +196,7 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 		"",
 		"DIVERS",
 		"B : fond (bureau en plein écran / gris / noir / blanc)",
+		"P : diaporama lecture / pause",
 		"S : ombre "+shadowMode,
 		"F11 : plein écran",
 		"Esc : quitter",

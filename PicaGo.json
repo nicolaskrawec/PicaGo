@@ -2,6 +2,7 @@
   "desktopBackground": true,
   "background": "desktop",
   "showShadow": true,
+  "slideshowIntervalSeconds": 1,
   "animateOnStart": true,
   "showDebug": false
 }
