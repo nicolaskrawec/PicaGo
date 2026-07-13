@@ -119,13 +119,8 @@ func (v *Viewer) helpText() string {
 		shadowMode = "on"
 	}
 
-	blurMode := "off"
-	if v.showBlur {
-		blurMode = "on"
-	}
-
 	rotation := v.view.Rotation * 90
-	return "PicaGo " + Version + " - NkSoft\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nRotation : " + strconv.Itoa(rotation) + " deg\nMÃ©moire : " + v.memoryStatusText() + "\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nShift+gauche/droite : miroir horizontal\nShift+haut/bas : miroir vertical\nCtrl+gauche : rotation anti-horaire\nCtrl+droite : rotation horaire\nMolette : zoom image\nShift+molette : zoom masque cercle\nCtrl+molette : opacité masque\nB : blur cercle " + blurMode + "\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	return "PicaGo " + Version + " - NkSoft\nF1 aide\nZoom image : " + strconv.Itoa(zoomPercent) + "%\nRotation : " + strconv.Itoa(rotation) + " deg\nMÃ©moire : " + v.memoryStatusText() + "\nCache : " + v.prefetchStatusText() + "\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nShift+gauche/droite : miroir horizontal\nShift+haut/bas : miroir vertical\nCtrl+gauche : rotation anti-horaire\nCtrl+droite : rotation horaire\nMolette : zoom image\nShift+molette : zoom masque cercle\nCtrl+molette : opacité masque\nZ : zoom 100% / maxi\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }
 
 func (v *Viewer) helpTextCompact() string {
@@ -147,11 +142,7 @@ func (v *Viewer) helpTextCompact() string {
 	if v.showShadow {
 		shadowMode = "on"
 	}
-	blurMode := "off"
-	if v.showBlur {
-		blurMode = "on"
-	}
-	return "PicaGo " + Version + " - NkSoft\nF1 aide\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nShift+gauche/droite : miroir horizontal\nShift+haut/bas : miroir vertical\nCtrl+gauche/droite : rotation\nMolette : zoom image\nShift+molette : gamma image\nAlt+molette : exposition\nCtrl+Alt+molette : contraste\nCtrl+molette : opacité masque\nCtrl+Shift+molette : taille masque cercle\nB : blur cercle " + blurMode + "\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
+	return "PicaGo " + Version + " - NkSoft\nF1 aide\nC : masque disque / inversion\nH : split horizontal\nV : split vertical\nShift+gauche/droite : miroir horizontal\nShift+haut/bas : miroir vertical\nCtrl+gauche/droite : rotation\nMolette : zoom image\nShift+molette : gamma image\nAlt+molette : exposition\nCtrl+Alt+molette : contraste\nCtrl+molette : opacité masque\nCtrl+Shift+molette : taille masque cercle\nL : slide sync " + syncMode + "\nS : shadow " + shadowMode + "\nR : fit\n1 : " + fileA + "\n2 : " + fileB
 }
 
 func (v *Viewer) helpTextCategorized(debug bool) string {
@@ -171,11 +162,6 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 	if v.showShadow {
 		shadowMode = "on"
 	}
-	blurMode := "off"
-	if v.showBlur {
-		blurMode = "on"
-	}
-
 	lines := []string{"PicaGo " + Version + " - NkSoft"}
 	if debug {
 		lines = append(lines,
@@ -206,7 +192,6 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 		"H / V : split horizontal / vertical",
 		"Ctrl+molette : opacité du masque",
 		"Ctrl+Shift+molette : taille du masque circulaire",
-		"B : flou du cercle "+blurMode,
 		"L : synchronisation du slider "+syncMode,
 		"",
 		"DIVERS",

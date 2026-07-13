@@ -122,7 +122,6 @@ type Viewer struct {
 	compareMaskAlpha      float64
 	circleBorderOpacity   float64
 	showShadow            bool
-	showBlur              bool
 	showHelp              bool
 	compareMask           compareMaskMode
 	circleMaskDiameter    float64
@@ -316,7 +315,6 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 				mouseX,
 				mouseY,
 				v.circleMaskDiameter,
-				v.showBlur,
 				v.reverseCompare,
 				v.compareMaskAlpha,
 				v.circleBorderOpacity,
@@ -338,7 +336,6 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 					drawView,
 					v.slider.Position,
 					int(v.slider.Orientation),
-					v.showBlur,
 					v.reverseCompare,
 					v.compareMaskAlpha,
 					v.sliderOpacity,

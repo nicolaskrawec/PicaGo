@@ -142,9 +142,6 @@ func (v *Viewer) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
 		v.showShadow = !v.showShadow
 	}
-	if inpututil.IsKeyJustPressed(ebiten.KeyB) {
-		v.showBlur = !v.showBlur
-	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
 		v.toggleBorderlessMaximized()
 	}
