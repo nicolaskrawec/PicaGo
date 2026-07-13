@@ -26,6 +26,15 @@ const (
 	displayModeCompare
 )
 
+type backgroundMode int
+
+const (
+	backgroundDesktop backgroundMode = iota
+	backgroundGray
+	backgroundBlack
+	backgroundWhite
+)
+
 type compareMaskMode int
 
 const (
@@ -200,6 +209,7 @@ type Viewer struct {
 	loadError                 string
 	desktopBackdrop           *ebiten.Image
 	desktopBackground         bool
+	background                backgroundMode
 	debugMode                 bool
 	centerInfoText            string
 	centerInfoUntil           time.Time
@@ -257,11 +267,18 @@ func Run(args []string) error {
 }
 
 func (v *Viewer) Draw(screen *ebiten.Image) {
-	screen.Fill(color.RGBA{127, 127, 127, 255})
-	if v.borderlessMaximized {
+	background := color.RGBA{127, 127, 127, 255}
+	switch v.background {
+	case backgroundBlack:
+		background = color.RGBA{0, 0, 0, 255}
+	case backgroundWhite:
+		background = color.RGBA{255, 255, 255, 255}
+	}
+	screen.Fill(background)
+	if v.usesDesktopBackground() {
 		drawDesktopBackdrop(screen, v.desktopBackdrop)
 	}
-	if v.borderlessMaximized && v.desktopBackdrop != nil {
+	if v.usesDesktopBackground() {
 		vector.FillRect(screen, 0, 0, float32(screen.Bounds().Dx()), float32(screen.Bounds().Dy()), color.RGBA{0, 0, 0, 160}, false)
 	}
 	newWidth, newHeight := screen.Bounds().Dx(), screen.Bounds().Dy()
