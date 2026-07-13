@@ -141,6 +141,7 @@ func (v *Viewer) Update() error {
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
 		v.showShadow = !v.showShadow
+		v.savePreferences()
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyB) {
 		v.toggleBackground()

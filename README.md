@@ -22,7 +22,7 @@ QA. The interface stays out of the way until you need it.
 - Borderless fullscreen with discreet corner and bottom-edge actions.
 - Compare two images with vertical, horizontal or circular masks.
 - Reverse which side or area reveals the comparison image.
-- Optional soft mask edge, image shadow and slider/image synchronization.
+- Image shadow and slider/image synchronization.
 - Compare images with different dimensions and aspect ratios.
 - Drag and drop onto the left or right half of the window to replace image A or
   B directly.
@@ -85,8 +85,11 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Left drag` on the image: pan.
 - `Mouse wheel`: zoom in and out around the cursor.
 - `Left drag` on the comparison slider: move the split.
-- `Shift + mouse wheel` in circular mode: resize the circular mask.
+- `Shift + mouse wheel`: adjust gamma.
+- `Alt + mouse wheel`: adjust exposure/brightness.
+- `Ctrl + Alt + mouse wheel`: adjust contrast.
 - `Ctrl + mouse wheel` in comparison mode: change the mask opacity.
+- `Ctrl + Shift + mouse wheel` in circular comparison mode: resize the circular mask.
 - `Double click` on the image: toggle fullscreen / restore window.
 - `Drag and drop`: load one or two images, or the first image in a folder.
 - `Top-left + left click/wheel up`: rotate 90 degrees counter-clockwise.
@@ -116,7 +119,9 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `V`: vertical split comparison.
 - Press `H` or `V` again: reverse the split direction.
 - `C`: circular comparison mask; press again to invert it.
-- `B`: toggle the soft/blurred comparison edge.
+- `B`: cycle the background. In fullscreen, this cycles desktop, gray, black
+  and white when the desktop background is available. In a window, or without
+  desktop capture, it cycles gray, black and white.
 - `L`: toggle slider sync with image movement.
 - `S`: toggle the image shadow.
 - `Shift + mouse wheel`: adjust the gamma correction of the displayed image;
@@ -131,19 +136,25 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 
 ## Configuration
 
-The Windows installer includes `PicaGo.json` next to the executable. The file
-can be edited while PicaGo is closed:
+PicaGo stores its per-user settings in `config.json` in the operating system's
+standard configuration directory: `%AppData%\PicaGo` on Windows,
+`$XDG_CONFIG_HOME/PicaGo` (usually `~/.config/PicaGo`) on Linux, and
+`~/Library/Application Support/PicaGo` on macOS. The legacy `PicaGo.json`
+beside the executable is imported automatically on first launch.
 
 ```json
 {
   "desktopBackground": true,
+  "background": "desktop",
   "showShadow": true,
   "animateOnStart": true
 }
 ```
 
-- `desktopBackground`: use the captured Windows desktop as the fullscreen
-  background; set it to `false` to use the gray background.
+- `desktopBackground`: enable the captured Windows desktop as a fullscreen
+  background option. Press `B` to cycle between it and the gray, black and
+  white backgrounds. Set it to `false` to disable desktop capture.
+- `background`: last selected background: `desktop`, `gray`, `black` or `white`.
 - `showShadow`: show the image shadow.
 - `animateOnStart`: animate the initial image fit when opening PicaGo.
 - `showDebug`: show the debug/help overlay at startup; `F1` toggles it afterward.

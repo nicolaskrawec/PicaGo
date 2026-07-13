@@ -210,6 +210,7 @@ type Viewer struct {
 	desktopBackdrop           *ebiten.Image
 	desktopBackground         bool
 	background                backgroundMode
+	preferences               config
 	debugMode                 bool
 	centerInfoText            string
 	centerInfoUntil           time.Time
@@ -230,6 +231,8 @@ func Run(args []string) error {
 		showShadow:          cfg.ShowShadow,
 		showHelp:            cfg.ShowDebug,
 		debugMode:           cfg.ShowDebug,
+		background:          backgroundModeFromConfig(cfg.Background),
+		preferences:         cfg,
 		// A session started without an image can receive one later via drag and
 		// drop. Do not capture the desktop in that case: the native capture path
 		// is not safe during the subsequent fullscreen transition.
@@ -260,7 +263,9 @@ func Run(args []string) error {
 		game.startAsyncImageFileLoad(args[0], asyncImageSlotA, true, cfg.AnimateOnStart)
 	}
 
-	if err := ebiten.RunGame(game); err != nil {
+	err := ebiten.RunGame(game)
+	game.savePreferences()
+	if err != nil {
 		return err
 	}
 	return nil

@@ -195,7 +195,7 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 		"L : synchronisation du slider "+syncMode,
 		"",
 		"DIVERS",
-		"B : fond (bureau / gris / noir / blanc)",
+		"B : fond (bureau en plein écran / gris / noir / blanc)",
 		"S : ombre "+shadowMode,
 		"F11 : plein écran",
 		"Esc : quitter",

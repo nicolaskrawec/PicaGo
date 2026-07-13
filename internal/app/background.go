@@ -30,7 +30,36 @@ func (v *Viewer) toggleBackground() {
 			v.background = backgroundGray
 		}
 	}
+	v.savePreferences()
 	v.showCenterInfo("Fond : %s", v.backgroundName())
+}
+
+func backgroundModeFromConfig(value string) backgroundMode {
+	switch value {
+	case "gray":
+		return backgroundGray
+	case "black":
+		return backgroundBlack
+	case "white":
+		return backgroundWhite
+	default:
+		return backgroundDesktop
+	}
+}
+
+func (v *Viewer) savePreferences() {
+	v.preferences.ShowShadow = v.showShadow
+	switch v.background {
+	case backgroundGray:
+		v.preferences.Background = "gray"
+	case backgroundBlack:
+		v.preferences.Background = "black"
+	case backgroundWhite:
+		v.preferences.Background = "white"
+	default:
+		v.preferences.Background = "desktop"
+	}
+	_ = saveConfig(v.preferences)
 }
 
 func (v *Viewer) backgroundName() string {

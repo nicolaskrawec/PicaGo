@@ -1,5 +1,6 @@
 {
   "desktopBackground": true,
+  "background": "desktop",
   "showShadow": true,
   "animateOnStart": true,
   "showDebug": false
