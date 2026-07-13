@@ -27,7 +27,7 @@ func DrawComparisonImage(screen *ebiten.Image, imageA, imageB *imagedata.LoadedI
 	if showShadow && !imageB.HasTransparency {
 		drawShadow(screen, imageB.Width, imageB.Height, windowWidth, windowHeight, rectB, view)
 	}
-	drawTexture(screen, imageB.GPUTexture, rectB, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, view.Alpha, view.Gamma)
+	drawTexture(screen, imageB.GPUTexture, rectB, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, view.Alpha, view.Gamma, view.Exposure, view.Contrast)
 }
 
 func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, windowWidth, windowHeight int, view View, sliderPosition float64, orientation int, feathered bool, reverse bool, maskAlpha, sliderOpacity float64, showShadow bool) {
@@ -74,9 +74,9 @@ func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, wi
 			return
 		}
 		if feathered {
-			drawFeatheredCompareImage(screen, imageB.GPUTexture, rectB, rectA, visibleTop, true, reverse, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskView.Alpha, view.Gamma)
+			drawFeatheredCompareImage(screen, imageB.GPUTexture, rectB, rectA, visibleTop, true, reverse, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskView.Alpha, view.Gamma, view.Exposure, view.Contrast)
 		} else {
-			drawClippedCompareImage(screen, imageB.GPUTexture, rectB, rectA, visibleTop, true, reverse, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskView.Alpha, view.Gamma)
+			drawClippedCompareImage(screen, imageB.GPUTexture, rectB, rectA, visibleTop, true, reverse, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskView.Alpha, view.Gamma, view.Exposure, view.Contrast)
 		}
 		if sliderOpacity > 0 {
 			vector.FillRect(screen, float32(rectA.Min.X), float32(visibleTop)-1, float32(rectA.Max.X-rectA.Min.X), 2, color.NRGBA{230, 230, 230, uint8(math.Round(96 * clampAlpha(sliderOpacity)))}, true)
@@ -87,9 +87,9 @@ func DrawCompare(screen *ebiten.Image, imageA, imageB *imagedata.LoadedImage, wi
 			return
 		}
 		if feathered {
-			drawFeatheredCompareImage(screen, imageB.GPUTexture, rectB, rectA, visibleLeft, false, reverse, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskView.Alpha, view.Gamma)
+			drawFeatheredCompareImage(screen, imageB.GPUTexture, rectB, rectA, visibleLeft, false, reverse, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskView.Alpha, view.Gamma, view.Exposure, view.Contrast)
 		} else {
-			drawClippedCompareImage(screen, imageB.GPUTexture, rectB, rectA, visibleLeft, false, reverse, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskView.Alpha, view.Gamma)
+			drawClippedCompareImage(screen, imageB.GPUTexture, rectB, rectA, visibleLeft, false, reverse, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskView.Alpha, view.Gamma, view.Exposure, view.Contrast)
 		}
 		if sliderOpacity > 0 {
 			vector.FillRect(screen, float32(visibleLeft)-1, float32(rectA.Min.Y), 2, float32(rectA.Max.Y-rectA.Min.Y), color.NRGBA{230, 230, 230, uint8(math.Round(96 * clampAlpha(sliderOpacity)))}, true)
@@ -180,7 +180,7 @@ func drawTransformedImageClippedByLine(screen, texture *ebiten.Image, destRect s
 	for i := 1; i+1 < len(result); i++ {
 		indices = append(indices, 0, uint16(i), uint16(i+1))
 	}
-	shader, uniforms := gammaDrawOptions(view.Gamma)
+	shader, uniforms := gammaDrawOptions(view.Gamma, view.Exposure, view.Contrast)
 	if shader != nil {
 		screen.DrawTrianglesShader(vertices, indices, shader, &ebiten.DrawTrianglesShaderOptions{Images: [4]*ebiten.Image{texture}, Uniforms: uniforms})
 	} else {
@@ -232,17 +232,17 @@ func DrawCompareCircle(screen *ebiten.Image, imageA, imageB *imagedata.LoadedIma
 	maskedAlpha := view.Alpha * clampAlpha(maskAlpha)
 
 	if reverse {
-		drawTexture(screen, imageB.GPUTexture, rectB, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, 0, 0, view.Alpha, view.Gamma)
+		drawTexture(screen, imageB.GPUTexture, rectB, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, 0, 0, view.Alpha, view.Gamma, view.Exposure, view.Contrast)
 		if feathered {
-			drawCircularTextureFeathered(screen, imageA.GPUTexture, rectA, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskedAlpha, view.Gamma)
+			drawCircularTextureFeathered(screen, imageA.GPUTexture, rectA, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskedAlpha, view.Gamma, view.Exposure, view.Contrast)
 		} else {
-			drawCircularTexture(screen, imageA.GPUTexture, rectA, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskedAlpha, view.Gamma)
+			drawCircularTexture(screen, imageA.GPUTexture, rectA, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskedAlpha, view.Gamma, view.Exposure, view.Contrast)
 		}
 	} else {
 		if feathered {
-			drawCircularTextureFeathered(screen, imageB.GPUTexture, rectB, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskedAlpha, view.Gamma)
+			drawCircularTextureFeathered(screen, imageB.GPUTexture, rectB, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskedAlpha, view.Gamma, view.Exposure, view.Contrast)
 		} else {
-			drawCircularTexture(screen, imageB.GPUTexture, rectB, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskedAlpha, view.Gamma)
+			drawCircularTexture(screen, imageB.GPUTexture, rectB, float64(centerX), float64(centerY), radius, view.FlipHorizontal, view.FlipVertical, view.RotationAngle, view.MirrorScaleX, view.MirrorScaleY, maskedAlpha, view.Gamma, view.Exposure, view.Contrast)
 		}
 	}
 
@@ -274,7 +274,7 @@ func compareRectForView(rectA stdimage.Rectangle, imageAWidth, imageAHeight, ima
 	)
 }
 
-func drawClippedCompareImage(screen *ebiten.Image, texture *ebiten.Image, destRect, maskRect stdimage.Rectangle, boundary int, horizontal bool, reverse bool, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma float64) {
+func drawClippedCompareImage(screen *ebiten.Image, texture *ebiten.Image, destRect, maskRect stdimage.Rectangle, boundary int, horizontal bool, reverse bool, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast float64) {
 	if math.Abs(rotation) > 0.001 || mirrorScaleX != 0 || mirrorScaleY != 0 {
 		ratio := float64(boundary)
 		if horizontal {
@@ -326,13 +326,13 @@ func drawClippedCompareImage(screen *ebiten.Image, texture *ebiten.Image, destRe
 		}
 		switch localSide {
 		case 0: // top
-			drawTransformedLocalImage(screen, texture, destRect, 0, 1, 0, ratio, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma)
+			drawTransformedLocalImage(screen, texture, destRect, 0, 1, 0, ratio, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast)
 		case 1: // right
-			drawTransformedLocalImage(screen, texture, destRect, ratio, 1, 0, 1, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma)
+			drawTransformedLocalImage(screen, texture, destRect, ratio, 1, 0, 1, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast)
 		case 2: // bottom
-			drawTransformedLocalImage(screen, texture, destRect, 0, 1, ratio, 1, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma)
+			drawTransformedLocalImage(screen, texture, destRect, 0, 1, ratio, 1, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast)
 		case 3: // left
-			drawTransformedLocalImage(screen, texture, destRect, 0, ratio, 0, 1, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma)
+			drawTransformedLocalImage(screen, texture, destRect, 0, ratio, 0, 1, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast)
 		}
 		return
 	}
@@ -355,10 +355,10 @@ func drawClippedCompareImage(screen *ebiten.Image, texture *ebiten.Image, destRe
 		return
 	}
 
-	drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma)
+	drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast)
 }
 
-func drawTransformedLocalImage(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, u0, u1, v0, v1 float64, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma float64) {
+func drawTransformedLocalImage(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, u0, u1, v0, v1 float64, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast float64) {
 	if texture == nil || destRect.Empty() || u1 <= u0 || v1 <= v0 {
 		return
 	}
@@ -397,7 +397,7 @@ func drawTransformedLocalImage(screen *ebiten.Image, texture *ebiten.Image, dest
 	for i := range vertices {
 		vertices[i] = ebiten.Vertex{DstX: points[i][0], DstY: points[i][1], SrcX: points[i][2], SrcY: points[i][3], ColorR: 1, ColorG: 1, ColorB: 1, ColorA: float32(clampAlpha(alpha))}
 	}
-	shader, uniforms := gammaDrawOptions(gamma)
+	shader, uniforms := gammaDrawOptions(gamma, exposure, contrast)
 	if shader != nil {
 		screen.DrawTrianglesShader(vertices, []uint16{0, 1, 2, 1, 2, 3}, shader, &ebiten.DrawTrianglesShaderOptions{Images: [4]*ebiten.Image{texture}, Uniforms: uniforms})
 	} else {
@@ -405,11 +405,11 @@ func drawTransformedLocalImage(screen *ebiten.Image, texture *ebiten.Image, dest
 	}
 }
 
-func drawFeatheredCompareImage(screen *ebiten.Image, texture *ebiten.Image, destRect, maskRect stdimage.Rectangle, boundary int, horizontal bool, reverse bool, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma float64) {
+func drawFeatheredCompareImage(screen *ebiten.Image, texture *ebiten.Image, destRect, maskRect stdimage.Rectangle, boundary int, horizontal bool, reverse bool, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast float64) {
 	const featherWidth = 10
 	const featherSteps = 10
 	if math.Abs(rotation) > 0.001 || mirrorScaleX != 0 || mirrorScaleY != 0 {
-		drawClippedCompareImage(screen, texture, destRect, maskRect, boundary, horizontal, reverse, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma)
+		drawClippedCompareImage(screen, texture, destRect, maskRect, boundary, horizontal, reverse, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast)
 		return
 	}
 
@@ -420,7 +420,7 @@ func drawFeatheredCompareImage(screen *ebiten.Image, texture *ebiten.Image, dest
 	if reverse {
 		fullBoundary = boundary - featherWidth/2
 	}
-	drawClippedCompareImage(screen, texture, destRect, maskRect, fullBoundary, horizontal, reverse, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma)
+	drawClippedCompareImage(screen, texture, destRect, maskRect, fullBoundary, horizontal, reverse, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast)
 
 	for i := 0; i < featherSteps; i++ {
 		bandStart := boundary - featherWidth/2 + i
@@ -440,12 +440,12 @@ func drawFeatheredCompareImage(screen *ebiten.Image, texture *ebiten.Image, dest
 			visibleRect.Max.X = minInt(visibleRect.Max.X, bandEnd)
 		}
 		if !visibleRect.Empty() {
-			drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, bandAlpha, gamma)
+			drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, bandAlpha, gamma, exposure, contrast)
 		}
 	}
 }
 
-func drawCircularTextureFeathered(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, centerX, centerY, radius float64, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma float64) {
+func drawCircularTextureFeathered(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, centerX, centerY, radius float64, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast float64) {
 	const featherWidth = 10.0
 	const featherSteps = 10
 
@@ -459,11 +459,11 @@ func drawCircularTextureFeathered(screen *ebiten.Image, texture *ebiten.Image, d
 		previousAlpha := clampAlpha(alpha) * float64(i) / featherSteps
 		layerAlpha := (targetAlpha - previousAlpha) / (1 - previousAlpha)
 		circleRadius := outerRadius - feather*float64(i)/float64(featherSteps-1)
-		drawCircularTexture(screen, texture, destRect, centerX, centerY, circleRadius, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, layerAlpha, gamma)
+		drawCircularTexture(screen, texture, destRect, centerX, centerY, circleRadius, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, layerAlpha, gamma, exposure, contrast)
 	}
 }
 
-func drawCircularTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, centerX, centerY, radius float64, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma float64) {
+func drawCircularTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, centerX, centerY, radius float64, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast float64) {
 	if texture == nil || destRect.Empty() || radius <= 0 {
 		return
 	}
@@ -496,7 +496,7 @@ func drawCircularTexture(screen *ebiten.Image, texture *ebiten.Image, destRect s
 			minInt(destRect.Max.Y, int(math.Floor(centerY+halfHeight))),
 		)
 		if !visibleRect.Empty() {
-			drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma)
+			drawTextureClipped(screen, texture, destRect, visibleRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast)
 		}
 	}
 }

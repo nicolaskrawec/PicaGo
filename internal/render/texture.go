@@ -7,7 +7,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma float64) {
+func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast float64) {
 	if texture == nil || destRect.Empty() {
 		return
 	}
@@ -49,7 +49,7 @@ func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.
 		options.GeoM.Translate(translateX, translateY)
 	}
 
-	shader, uniforms := gammaDrawOptions(gamma)
+	shader, uniforms := gammaDrawOptions(gamma, exposure, contrast)
 	if shader != nil {
 		drawTexturedQuadShader(screen, texture, destRect, flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY, alpha, shader, uniforms)
 		return
@@ -58,16 +58,46 @@ func drawTexture(screen *ebiten.Image, texture *ebiten.Image, destRect stdimage.
 }
 
 func drawTexturedQuadShader(screen, texture *ebiten.Image, destRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha float64, shader *ebiten.Shader, uniforms map[string]any) {
-	points := [][2]int{{destRect.Min.X, destRect.Min.Y}, {destRect.Max.X, destRect.Min.Y}, {destRect.Min.X, destRect.Max.Y}, {destRect.Max.X, destRect.Max.Y}}
-	vertices := make([]ebiten.Vertex, 4)
-	for i, point := range points {
-		sourceX, sourceY := sourcePoint(point[0], point[1], destRect, texture.Bounds(), flipHorizontal, flipVertical, rotation, mirrorScaleX, mirrorScaleY)
-		vertices[i] = ebiten.Vertex{DstX: float32(point[0]), DstY: float32(point[1]), SrcX: float32(sourceX), SrcY: float32(sourceY), ColorR: 1, ColorG: 1, ColorB: 1, ColorA: float32(clampAlpha(alpha))}
+	texBounds := texture.Bounds()
+	angle := rotation * math.Pi / 2
+	cosine, sine := math.Cos(angle), math.Sin(angle)
+	rotatedWidth := float64(texBounds.Dx())*math.Abs(cosine) + float64(texBounds.Dy())*math.Abs(sine)
+	scale := float64(destRect.Dx()) / math.Max(1, rotatedWidth)
+	mirrorX, mirrorY := 1.0, 1.0
+	if flipHorizontal {
+		mirrorX = -1
 	}
+	if flipVertical {
+		mirrorY = -1
+	}
+	if mirrorScaleX != 0 {
+		mirrorX = mirrorScaleX
+	}
+	if mirrorScaleY != 0 {
+		mirrorY = mirrorScaleY
+	}
+	point := func(u, v float64) ebiten.Vertex {
+		x := (u - 0.5) * float64(texBounds.Dx()) * mirrorX
+		y := (v - 0.5) * float64(texBounds.Dy()) * mirrorY
+		dx := scale * (cosine*x - sine*y)
+		dy := scale * (sine*x + cosine*y)
+		return ebiten.Vertex{
+			DstX:   float32(float64(destRect.Min.X+destRect.Max.X)/2 + dx),
+			DstY:   float32(float64(destRect.Min.Y+destRect.Max.Y)/2 + dy),
+			SrcX:   float32(float64(texBounds.Min.X) + u*float64(texBounds.Dx())),
+			SrcY:   float32(float64(texBounds.Min.Y) + v*float64(texBounds.Dy())),
+			ColorR: 1, ColorG: 1, ColorB: 1, ColorA: float32(clampAlpha(alpha)),
+		}
+	}
+	vertices := make([]ebiten.Vertex, 4)
+	vertices[0] = point(0, 0)
+	vertices[1] = point(1, 0)
+	vertices[2] = point(0, 1)
+	vertices[3] = point(1, 1)
 	screen.DrawTrianglesShader(vertices, []uint16{0, 1, 2, 1, 2, 3}, shader, &ebiten.DrawTrianglesShaderOptions{Images: [4]*ebiten.Image{texture}, Uniforms: uniforms})
 }
 
-func drawTextureClipped(screen *ebiten.Image, texture *ebiten.Image, destRect, visibleRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma float64) {
+func drawTextureClipped(screen *ebiten.Image, texture *ebiten.Image, destRect, visibleRect stdimage.Rectangle, flipHorizontal, flipVertical bool, rotation, mirrorScaleX, mirrorScaleY, alpha, gamma, exposure, contrast float64) {
 	if texture == nil || destRect.Empty() || visibleRect.Empty() {
 		return
 	}
@@ -113,7 +143,7 @@ func drawTextureClipped(screen *ebiten.Image, texture *ebiten.Image, destRect, v
 	options := &ebiten.DrawTrianglesOptions{
 		Filter: ebiten.FilterLinear,
 	}
-	shader, uniforms := gammaDrawOptions(gamma)
+	shader, uniforms := gammaDrawOptions(gamma, exposure, contrast)
 	if shader != nil {
 		screen.DrawTrianglesShader(vertices, indices, shader, &ebiten.DrawTrianglesShaderOptions{Images: [4]*ebiten.Image{texture}, Uniforms: uniforms})
 	} else {

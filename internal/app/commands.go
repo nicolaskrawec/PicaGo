@@ -308,7 +308,10 @@ func (v *Viewer) Update() error {
 		v.markCompareBorderActivity(now)
 		shiftPressed := ebiten.IsKeyPressed(ebiten.KeyShift)
 		controlPressed := ebiten.IsKeyPressed(ebiten.KeyControl)
-		if v.mode == displayModeCompare && v.imageB != nil && controlPressed && !shiftPressed {
+		altPressed := ebiten.IsKeyPressed(ebiten.KeyAlt)
+		if controlPressed && altPressed {
+			v.adjustContrast(wheelDelta)
+		} else if v.mode == displayModeCompare && v.imageB != nil && controlPressed && !shiftPressed {
 			v.adjustCompareMaskAlpha(wheelDelta)
 		} else if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			if wheelDelta > 0 {
@@ -326,6 +329,8 @@ func (v *Viewer) Update() error {
 			v.adjustCircleMaskDiameter(wheelDelta)
 		} else if shiftPressed {
 			v.adjustGamma(wheelDelta)
+		} else if altPressed {
+			v.adjustExposure(wheelDelta)
 		} else {
 			v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.15, wheelDelta))
 		}

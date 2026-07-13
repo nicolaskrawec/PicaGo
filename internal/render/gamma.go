@@ -13,6 +13,8 @@ const gammaShaderSource = `
 package main
 
 var Gamma float
+var Exposure float
+var Contrast float
 
 func sampleLinear(position vec2) vec4 {
 	origin := imageSrc0Origin()
@@ -29,6 +31,8 @@ func sampleLinear(position vec2) vec4 {
 
 func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 	fragment := sampleLinear(texCoord)
+	fragment.rgb *= exp2(vec3(Exposure))
+	fragment.rgb = (fragment.rgb - vec3(0.5)) * Contrast + vec3(0.5)
 	correction := vec3(1.0 / Gamma)
 	fragment.rgb = pow(fragment.rgb, correction)
 	return fragment * color
@@ -38,11 +42,11 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 var gammaShaderOnce sync.Once
 var gammaShader *ebiten.Shader
 
-func gammaDrawOptions(gamma float64) (*ebiten.Shader, map[string]any) {
+func gammaDrawOptions(gamma, exposure, contrast float64) (*ebiten.Shader, map[string]any) {
 	if gamma <= 0 {
 		gamma = 1
 	}
-	if math.Abs(gamma-1) < 0.0001 {
+	if math.Abs(gamma-1) < 0.0001 && math.Abs(exposure) < 0.0001 && math.Abs(contrast-1) < 0.0001 {
 		return nil, nil
 	}
 
@@ -52,7 +56,21 @@ func gammaDrawOptions(gamma float64) (*ebiten.Shader, map[string]any) {
 	if gammaShader == nil {
 		return nil, nil
 	}
-	return gammaShader, map[string]any{"Gamma": float32(clampGamma(gamma))}
+	return gammaShader, map[string]any{
+		"Gamma":    float32(clampGamma(gamma)),
+		"Exposure": float32(exposure),
+		"Contrast": float32(clampContrast(contrast)),
+	}
+}
+
+func clampContrast(contrast float64) float64 {
+	if contrast <= 0 {
+		return 1
+	}
+	if contrast > 4 {
+		return 4
+	}
+	return contrast
 }
 
 func clampGamma(gamma float64) float64 {

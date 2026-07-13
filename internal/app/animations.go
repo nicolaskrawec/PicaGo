@@ -217,6 +217,8 @@ func (v *Viewer) animateView() {
 		v.view.Rotation = v.viewAnimationTo.Rotation
 		v.view.RotationAngle = v.viewAnimationTo.RotationAngle
 		v.view.Gamma = lerpFloat(v.viewAnimationFrom.Gamma, v.viewAnimationTo.Gamma, eased)
+		v.view.Exposure = lerpFloat(v.viewAnimationFrom.Exposure, v.viewAnimationTo.Exposure, eased)
+		v.view.Contrast = lerpFloat(v.viewAnimationFrom.Contrast, v.viewAnimationTo.Contrast, eased)
 		v.targetView = v.viewAnimationTo
 		return
 	}
@@ -250,6 +252,16 @@ func (v *Viewer) animateView() {
 		v.view.Gamma = v.targetView.Gamma
 	} else {
 		v.view.Gamma += (v.targetView.Gamma - v.view.Gamma) * smoothing
+	}
+	if math.Abs(v.view.Exposure-v.targetView.Exposure) < 0.001 {
+		v.view.Exposure = v.targetView.Exposure
+	} else {
+		v.view.Exposure += (v.targetView.Exposure - v.view.Exposure) * smoothing
+	}
+	if math.Abs(v.view.Contrast-v.targetView.Contrast) < 0.001 {
+		v.view.Contrast = v.targetView.Contrast
+	} else {
+		v.view.Contrast += (v.targetView.Contrast - v.view.Contrast) * smoothing
 	}
 }
 
@@ -352,7 +364,9 @@ func viewAlmostEqual(a, b render.View) bool {
 		math.Abs(a.RotationAngle-b.RotationAngle) < 0.001 &&
 		math.Abs(a.MirrorScaleX-b.MirrorScaleX) < 0.001 &&
 		math.Abs(a.MirrorScaleY-b.MirrorScaleY) < 0.001 &&
-		math.Abs(a.Gamma-b.Gamma) < 0.001
+		math.Abs(a.Gamma-b.Gamma) < 0.001 &&
+		math.Abs(a.Exposure-b.Exposure) < 0.001 &&
+		math.Abs(a.Contrast-b.Contrast) < 0.001
 }
 
 func (v *Viewer) startViewAnimation(from, to render.View, duration, delay time.Duration) {

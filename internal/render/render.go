@@ -21,6 +21,8 @@ type View struct {
 	MirrorScaleX   float64
 	MirrorScaleY   float64
 	Gamma          float64
+	Exposure       float64
+	Contrast       float64
 }
 
 func FitZoom(windowWidth, windowHeight, imageWidth, imageHeight int) float64 {
@@ -70,5 +72,5 @@ func DrawImage(screen *ebiten.Image, loaded *imagedata.LoadedImage, windowWidth,
 		drawShadow(screen, loaded.Width, loaded.Height, windowWidth, windowHeight, rect, view)
 	}
 	rotationAngle := view.RotationAngle
-	drawTexture(screen, loaded.GPUTexture, rect, view.FlipHorizontal, view.FlipVertical, rotationAngle, view.MirrorScaleX, view.MirrorScaleY, view.Alpha, view.Gamma)
+	drawTexture(screen, loaded.GPUTexture, rect, view.FlipHorizontal, view.FlipVertical, rotationAngle, view.MirrorScaleX, view.MirrorScaleY, view.Alpha, view.Gamma, view.Exposure, view.Contrast)
 }

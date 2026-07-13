@@ -34,6 +34,8 @@ func (v *Viewer) resetFit() {
 		MirrorScaleX:   v.view.MirrorScaleX,
 		MirrorScaleY:   v.view.MirrorScaleY,
 		Gamma:          v.view.Gamma,
+		Exposure:       v.view.Exposure,
+		Contrast:       v.view.Contrast,
 	}
 	if v.skipNextFitAnimation {
 		v.skipNextFitAnimation = false
