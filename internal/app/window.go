@@ -55,6 +55,29 @@ func (v *Viewer) resetFit() {
 	v.ensureSliderPosition()
 }
 
+// resetViewParameters restores the image adjustments and transformations,
+// then fits the image in the window. It is intentionally separate from
+// resetFit because Z and resize operations must keep the user's adjustments.
+func (v *Viewer) resetViewParameters() {
+	if v.imageA == nil {
+		return
+	}
+
+	v.stopViewAnimation(true)
+	v.openingAnimationActive = false
+	v.rotationAnimationActive = false
+	v.pendingRotationTurns = 0
+	v.mirrorAnimationActive = false
+	v.view = render.View{
+		Zoom:     1,
+		Alpha:    1,
+		Gamma:    defaultGamma,
+		Contrast: 1,
+	}
+	v.targetView = v.view
+	v.resetFit()
+}
+
 func (v *Viewer) toggleZoom100Fit(mouseX, mouseY float64) {
 	if v.imageA == nil {
 		return
@@ -99,8 +122,6 @@ func (v *Viewer) restoreWindow() {
 	if !v.borderlessMaximized {
 		return
 	}
-	v.invalidateSavedImageZooms()
-
 	v.prepareSliderRestore()
 
 	targetX, targetY := v.windowedPosX, v.windowedPosY
@@ -157,8 +178,6 @@ func (v *Viewer) enterBorderlessMaximized() {
 	if v.borderlessMaximized {
 		return
 	}
-	v.invalidateSavedImageZooms()
-
 	v.captureWindowedState()
 	// Capture the desktop only once. Reusing the GPU texture avoids calling
 	// the native GDI capture path again after a fullscreen/restore cycle.

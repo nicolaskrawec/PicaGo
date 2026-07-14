@@ -246,7 +246,7 @@ func Run(args []string) error {
 		prefetchInFlight:      make(map[string]bool),
 		prefetchSlots:         make(chan struct{}, 2),
 		prefetchedImages:      make(map[string]*imagedata.DecodedImage),
-		imageViewStates:       make(map[string]render.View),
+		imageViewStates:       loadImageViewStates(),
 		invalidatedZoomStates: make(map[string]bool),
 	}
 
@@ -266,6 +266,8 @@ func Run(args []string) error {
 	}
 
 	err := ebiten.RunGame(game)
+	game.rememberCurrentImageView()
+	_ = saveImageViewStates(game.imageViewStates)
 	game.savePreferences()
 	if err != nil {
 		return err

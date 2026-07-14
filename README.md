@@ -143,6 +143,13 @@ standard configuration directory: `%AppData%\PicaGo` on Windows,
 `~/Library/Application Support/PicaGo` on macOS. The legacy `PicaGo.json`
 beside the executable is imported automatically on first launch.
 
+The view parameters changed for individual images are stored separately in
+`image-views.json` in the same directory. They are restored automatically when
+the image is opened again. The file uses compact JSON and indexes settings by
+a fast hash of the normalized absolute path; the path itself is not stored.
+Images without changed parameters are not kept in that file. Older key formats
+are ignored.
+
 ```json
 {
   "desktopBackground": true,

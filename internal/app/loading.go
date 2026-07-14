@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+	"hash/fnv"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -164,9 +166,11 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 	v.loadError = ""
 	v.pendingHighRes[slot] = nil
 	v.initialPrefetchPending = false
-	if v.imageA != nil && v.imageA.FilePath != "" {
-		v.imageViewStates[imageViewStateKey(v.imageA.FilePath)] = v.targetView
-	}
+	v.rememberCurrentImageView()
+	// Persist the previous image's state when a new image is applied. Changes
+	// made while viewing the current image remain in memory until this point
+	// or until the application closes.
+	_ = saveImageViewStates(v.imageViewStates)
 	savedView, hasSavedView := v.imageViewStates[imageViewStateKey(decoded.FilePath)]
 	hasSavedZoom := hasSavedView && savedView.Zoom > 0
 	var oldLoaded *imagedata.LoadedImage
@@ -260,10 +264,29 @@ func (v *Viewer) rememberCurrentImageView() {
 	// animation is in progress, which is the state to restore later.
 	key := imageViewStateKey(v.imageA.FilePath)
 	state := v.targetView
-	if v.invalidatedZoomStates[key] {
+	if v.fitMode || v.invalidatedZoomStates[key] {
 		state.Zoom = 0
 	}
+	if imageViewStateIsDefault(state) {
+		if _, exists := v.imageViewStates[key]; exists {
+			delete(v.imageViewStates, key)
+		}
+		return
+	}
+	if previous, exists := v.imageViewStates[key]; exists && viewAlmostEqual(previous, state) {
+		return
+	}
 	v.imageViewStates[key] = state
+}
+
+func imageViewStateIsDefault(state render.View) bool {
+	alphaDefault := state.Alpha == 0 || state.Alpha == 1
+	gammaDefault := state.Gamma <= 0 || state.Gamma == defaultGamma
+	contrastDefault := state.Contrast <= 0 || state.Contrast == 1
+	return state.Zoom == 0 && state.OffsetX == 0 && state.OffsetY == 0 && alphaDefault &&
+		!state.FlipHorizontal && !state.FlipVertical && state.Rotation == 0 &&
+		state.RotationAngle == 0 && state.MirrorScaleX == 0 && state.MirrorScaleY == 0 &&
+		gammaDefault && state.Exposure == 0 && contrastDefault
 }
 
 func (v *Viewer) invalidateSavedImageZooms() {
@@ -282,8 +305,13 @@ func (v *Viewer) markCurrentZoomChanged() {
 }
 
 func imageViewStateKey(path string) string {
-	if absolutePath, err := filepath.Abs(path); err == nil {
+	absolutePath, err := filepath.Abs(path)
+	if err == nil {
 		path = absolutePath
 	}
-	return strings.ToLower(filepath.Clean(path))
+	path = strings.ToLower(filepath.Clean(path))
+	path = strings.ReplaceAll(path, "\\", "/")
+	hash := fnv.New64a()
+	_, _ = hash.Write([]byte(path))
+	return fmt.Sprintf("fnv1a64:%016x", hash.Sum64())
 }

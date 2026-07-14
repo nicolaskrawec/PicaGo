@@ -195,3 +195,28 @@ func TestAdjustCompareMaskAlphaClamps(t *testing.T) {
 		t.Fatalf("alpha lower clamp = %v, want 0", v.compareMaskAlpha)
 	}
 }
+
+func TestResetViewParametersRestoresDefaults(t *testing.T) {
+	v := Viewer{
+		imageA:       &imagedata.LoadedImage{Width: 100, Height: 50},
+		windowWidth:  1000,
+		windowHeight: 800,
+		view: render.View{
+			Zoom: 3, OffsetX: 42, OffsetY: -17, Alpha: 0.4,
+			FlipHorizontal: true, FlipVertical: true, Rotation: 2,
+			RotationAngle: 2, MirrorScaleX: -1, MirrorScaleY: -1,
+			Gamma: 2, Exposure: 1, Contrast: 2,
+		},
+		targetView: render.View{Zoom: 3, Gamma: 2, Contrast: 2},
+	}
+
+	v.resetViewParameters()
+	if v.targetView.Zoom != render.FitZoom(1000, 800, 100, 50) ||
+		v.targetView.OffsetX != 0 || v.targetView.OffsetY != 0 ||
+		v.targetView.Alpha != 1 || v.targetView.FlipHorizontal || v.targetView.FlipVertical ||
+		v.targetView.Rotation != 0 || v.targetView.RotationAngle != 0 ||
+		v.targetView.MirrorScaleX != 0 || v.targetView.MirrorScaleY != 0 ||
+		v.targetView.Gamma != defaultGamma || v.targetView.Exposure != 0 || v.targetView.Contrast != 1 {
+		t.Fatalf("reset target view = %+v", v.targetView)
+	}
+}
