@@ -113,7 +113,7 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
   the mouse cursor when switching to 100%.
 - Manual panning or zooming leaves persistent fit mode; resizing then keeps the
   chosen view instead of refitting it.
-- `F1`: toggle help overlay.
+- `F1`: toggle the English help overlay.
 - `F11`: toggle borderless fullscreen.
 - `H`: horizontal split comparison.
 - `V`: vertical split comparison.
