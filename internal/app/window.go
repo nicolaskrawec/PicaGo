@@ -75,6 +75,9 @@ func (v *Viewer) resetViewParameters() {
 		Contrast: 1,
 	}
 	v.targetView = v.view
+	// Resetting with R should be instantaneous. resetFit consumes this flag
+	// and keeps the animated fit behavior for all other callers.
+	v.skipNextFitAnimation = true
 	v.resetFit()
 }
 

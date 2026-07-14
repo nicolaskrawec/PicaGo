@@ -219,4 +219,7 @@ func TestResetViewParametersRestoresDefaults(t *testing.T) {
 		v.targetView.Gamma != defaultGamma || v.targetView.Exposure != 0 || v.targetView.Contrast != 1 {
 		t.Fatalf("reset target view = %+v", v.targetView)
 	}
+	if !viewAlmostEqual(v.view, v.targetView) || v.viewAnimationActive {
+		t.Fatalf("reset should be instantaneous: view=%+v target=%+v animation=%v", v.view, v.targetView, v.viewAnimationActive)
+	}
 }
