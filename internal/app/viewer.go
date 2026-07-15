@@ -206,7 +206,6 @@ type Viewer struct {
 	navigationDirectory       string
 	navigationImages          []string
 	imageViewStates           map[string]render.View
-	invalidatedZoomStates     map[string]bool
 	loadingImageName          string
 	loadError                 string
 	desktopBackdrop           *ebiten.Image
@@ -238,16 +237,15 @@ func Run(args []string) error {
 		// A session started without an image can receive one later via drag and
 		// drop. Do not capture the desktop in that case: the native capture path
 		// is not safe during the subsequent fullscreen transition.
-		desktopBackground:     cfg.DesktopBackground && len(args) > 0,
-		syncSliderWithImage:   true,
-		animateInitialFit:     cfg.AnimateOnStart,
-		imageLoadResults:      make(chan asyncImageResult, 4),
-		prefetchResults:       make(chan prefetchedImageResult, 4),
-		prefetchInFlight:      make(map[string]bool),
-		prefetchSlots:         make(chan struct{}, 2),
-		prefetchedImages:      make(map[string]*imagedata.DecodedImage),
-		imageViewStates:       loadImageViewStates(),
-		invalidatedZoomStates: make(map[string]bool),
+		desktopBackground:   cfg.DesktopBackground && len(args) > 0,
+		syncSliderWithImage: true,
+		animateInitialFit:   cfg.AnimateOnStart,
+		imageLoadResults:    make(chan asyncImageResult, 4),
+		prefetchResults:     make(chan prefetchedImageResult, 4),
+		prefetchInFlight:    make(map[string]bool),
+		prefetchSlots:       make(chan struct{}, 2),
+		prefetchedImages:    make(map[string]*imagedata.DecodedImage),
+		imageViewStates:     loadImageViewStates(),
 	}
 
 	ebiten.SetWindowResizable(true)

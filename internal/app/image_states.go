@@ -12,6 +12,49 @@ import (
 
 const imageStatesFileName = "image-views.json"
 
+type persistedImageView struct {
+	Alpha          float64
+	FlipHorizontal bool
+	FlipVertical   bool
+	Rotation       int
+	RotationAngle  float64
+	MirrorScaleX   float64
+	MirrorScaleY   float64
+	Gamma          float64
+	Exposure       float64
+	Contrast       float64
+}
+
+func newPersistedImageView(view render.View) persistedImageView {
+	return persistedImageView{
+		Alpha:          view.Alpha,
+		FlipHorizontal: view.FlipHorizontal,
+		FlipVertical:   view.FlipVertical,
+		Rotation:       view.Rotation,
+		RotationAngle:  view.RotationAngle,
+		MirrorScaleX:   view.MirrorScaleX,
+		MirrorScaleY:   view.MirrorScaleY,
+		Gamma:          view.Gamma,
+		Exposure:       view.Exposure,
+		Contrast:       view.Contrast,
+	}
+}
+
+func (view persistedImageView) renderView() render.View {
+	return render.View{
+		Alpha:          view.Alpha,
+		FlipHorizontal: view.FlipHorizontal,
+		FlipVertical:   view.FlipVertical,
+		Rotation:       view.Rotation,
+		RotationAngle:  view.RotationAngle,
+		MirrorScaleX:   view.MirrorScaleX,
+		MirrorScaleY:   view.MirrorScaleY,
+		Gamma:          view.Gamma,
+		Exposure:       view.Exposure,
+		Contrast:       view.Contrast,
+	}
+}
+
 func loadImageViewStates() map[string]render.View {
 	states := make(map[string]render.View)
 	path, err := imageStatesPath()
@@ -22,15 +65,13 @@ func loadImageViewStates() map[string]render.View {
 	if err != nil {
 		return make(map[string]render.View)
 	}
-	var stored map[string]render.View
+	var stored map[string]persistedImageView
 	if json.Unmarshal(data, &stored) != nil {
 		return make(map[string]render.View)
 	}
 	for key, state := range stored {
-		// Deliberately ignore old formats. Only current hashed keys are
-		// accepted, so an old file is not silently interpreted differently.
 		if isImageViewStateKey(key) {
-			states[key] = state
+			states[key] = state.renderView()
 		}
 	}
 	return states
@@ -52,7 +93,11 @@ func saveImageViewStates(states map[string]render.View) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	data, err := json.Marshal(states)
+	stored := make(map[string]persistedImageView, len(states))
+	for key, state := range states {
+		stored[key] = newPersistedImageView(state)
+	}
+	data, err := json.Marshal(stored)
 	if err != nil {
 		return err
 	}

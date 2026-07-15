@@ -124,7 +124,6 @@ func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
 		return
 	}
 	v.fitMode = false
-	v.markCurrentZoomChanged()
 	v.stopViewAnimation(false)
 
 	oldZoom := v.view.Zoom
@@ -358,10 +357,7 @@ func (v *Viewer) updateFramePacing(now time.Time, active bool) {
 }
 
 func viewAlmostEqual(a, b render.View) bool {
-	return math.Abs(a.Zoom-b.Zoom) < 0.001 &&
-		math.Abs(a.OffsetX-b.OffsetX) < 0.001 &&
-		math.Abs(a.OffsetY-b.OffsetY) < 0.001 &&
-		math.Abs(a.Alpha-b.Alpha) < 0.001 &&
+	return math.Abs(a.Alpha-b.Alpha) < 0.001 &&
 		a.FlipHorizontal == b.FlipHorizontal &&
 		a.FlipVertical == b.FlipVertical &&
 		a.Rotation == b.Rotation &&

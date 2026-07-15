@@ -172,7 +172,6 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 	// or until the application closes.
 	_ = saveImageViewStates(v.imageViewStates)
 	savedView, hasSavedView := v.imageViewStates[imageViewStateKey(decoded.FilePath)]
-	hasSavedZoom := hasSavedView && savedView.Zoom > 0
 	var oldLoaded *imagedata.LoadedImage
 	var oldDecoded *imagedata.DecodedImage
 	if resetView {
@@ -197,16 +196,11 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 			v.mode = displayModeSingleA
 		}
 		v.circleMaskDiameter = defaultCircleMaskDiameterRatio
-		if activateFit && !hasSavedZoom {
+		if activateFit {
 			v.fitMode = true
 			v.pendingResetFit = true
 			v.animateInitialFit = animateFit
 			v.skipNextFitAnimation = !animateFit
-		} else if hasSavedZoom {
-			v.fitMode = false
-			v.pendingResetFit = false
-			v.animateInitialFit = false
-			v.skipNextFitAnimation = false
 		}
 	case asyncImageSlotB:
 		oldLoaded = v.imageB
@@ -264,9 +258,9 @@ func (v *Viewer) rememberCurrentImageView() {
 	// animation is in progress, which is the state to restore later.
 	key := imageViewStateKey(v.imageA.FilePath)
 	state := v.targetView
-	if v.fitMode || v.invalidatedZoomStates[key] {
-		state.Zoom = 0
-	}
+	state.Zoom = 0
+	state.OffsetX = 0
+	state.OffsetY = 0
 	if imageViewStateIsDefault(state) {
 		if _, exists := v.imageViewStates[key]; exists {
 			delete(v.imageViewStates, key)
@@ -283,25 +277,10 @@ func imageViewStateIsDefault(state render.View) bool {
 	alphaDefault := state.Alpha == 0 || state.Alpha == 1
 	gammaDefault := state.Gamma <= 0 || state.Gamma == defaultGamma
 	contrastDefault := state.Contrast <= 0 || state.Contrast == 1
-	return state.Zoom == 0 && state.OffsetX == 0 && state.OffsetY == 0 && alphaDefault &&
+	return alphaDefault &&
 		!state.FlipHorizontal && !state.FlipVertical && state.Rotation == 0 &&
 		state.RotationAngle == 0 && state.MirrorScaleX == 0 && state.MirrorScaleY == 0 &&
 		gammaDefault && state.Exposure == 0 && contrastDefault
-}
-
-func (v *Viewer) invalidateSavedImageZooms() {
-	for key, state := range v.imageViewStates {
-		state.Zoom = 0
-		v.imageViewStates[key] = state
-		v.invalidatedZoomStates[key] = true
-	}
-}
-
-func (v *Viewer) markCurrentZoomChanged() {
-	if v.imageA == nil || v.imageA.FilePath == "" {
-		return
-	}
-	delete(v.invalidatedZoomStates, imageViewStateKey(v.imageA.FilePath))
 }
 
 func imageViewStateKey(path string) string {

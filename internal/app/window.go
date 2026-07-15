@@ -16,7 +16,6 @@ func (v *Viewer) resetFit() {
 		return
 	}
 	v.fitMode = true
-	v.markCurrentZoomChanged()
 
 	fitWidth, fitHeight := base.Width, base.Height
 	if v.view.Rotation%2 != 0 {
@@ -85,8 +84,6 @@ func (v *Viewer) toggleZoom100Fit(mouseX, mouseY float64) {
 	if v.imageA == nil {
 		return
 	}
-	v.markCurrentZoomChanged()
-
 	if math.Abs(v.view.Zoom-1) < 0.001 {
 		v.resetFit()
 		v.showCenterInfo("Zoom %d%%", int(math.Round(v.targetView.Zoom*100)))
