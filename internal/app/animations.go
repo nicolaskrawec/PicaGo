@@ -264,11 +264,14 @@ func (v *Viewer) animateView() {
 	}
 }
 
-func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed bool) bool {
+func (v *Viewer) shouldStayActive(now time.Time, mouseMoved, leftMousePressed, rightMousePressed bool) bool {
 	if v.slideshowPlaying {
 		return true
 	}
 	if mouseMoved || leftMousePressed || rightMousePressed || v.draggingImage || v.draggingSlider || v.restoreClickPending {
+		return true
+	}
+	if !v.lastCursorActivityAt.IsZero() && !v.cursorIdle(now) {
 		return true
 	}
 

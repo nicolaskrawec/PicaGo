@@ -166,9 +166,11 @@ func (v *Viewer) Update() error {
 		mouseMoved = mouseX != v.idleMouseX || mouseY != v.idleMouseY
 	} else {
 		v.idleMouseTracked = true
+		v.lastCursorActivityAt = now
 	}
 	if mouseMoved || leftMousePressed || rightMousePressed {
 		v.markCompareBorderActivity(now)
+		v.lastCursorActivityAt = now
 	}
 	v.idleMouseX = mouseX
 	v.idleMouseY = mouseY
@@ -310,6 +312,7 @@ func (v *Viewer) Update() error {
 	wheelDelta := input.WheelDelta()
 	if wheelDelta != 0 {
 		v.markCompareBorderActivity(now)
+		v.lastCursorActivityAt = now
 		shiftPressed := ebiten.IsKeyPressed(ebiten.KeyShift)
 		controlPressed := ebiten.IsKeyPressed(ebiten.KeyControl)
 		altPressed := ebiten.IsKeyPressed(ebiten.KeyAlt)
@@ -363,9 +366,9 @@ func (v *Viewer) Update() error {
 
 	v.updateSoloPreview(ebiten.IsKeyPressed(ebiten.Key1), ebiten.IsKeyPressed(ebiten.Key2))
 
-	v.updateCursorShape(mouseX, mouseY, imageRect, imageReady)
+	v.updateCursorShape(now, mouseX, mouseY, imageRect, imageReady)
 	v.updateSlideshow(now)
-	v.updateFramePacing(now, v.shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed))
+	v.updateFramePacing(now, v.shouldStayActive(now, mouseMoved, leftMousePressed, rightMousePressed))
 
 	return nil
 }

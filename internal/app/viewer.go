@@ -75,6 +75,7 @@ type pendingHighResImage struct {
 const idleFrameDelay = 500 * time.Millisecond
 const targetTPS = 120
 const compareBorderIdleDelay = 600 * time.Millisecond
+const cursorIdleDelay = 2 * time.Second
 const cornerCommandTolerance = 25
 const bottomCommandHeight = 40
 const bottomCommandCornerWidth = 50
@@ -171,6 +172,7 @@ type Viewer struct {
 	idleMouseTracked          bool
 	idleMouseX                int
 	idleMouseY                int
+	lastCursorActivityAt      time.Time
 	viewAnimationActive       bool
 	viewAnimationStart        time.Time
 	viewAnimationLength       time.Duration

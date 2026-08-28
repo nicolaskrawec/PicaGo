@@ -2,11 +2,33 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"viewergo/internal/compare"
 	imagedata "viewergo/internal/image"
 	"viewergo/internal/render"
 )
+
+func TestCursorBecomesIdleAfterDelay(t *testing.T) {
+	now := time.Now()
+	v := Viewer{}
+	if v.cursorIdle(now) {
+		t.Fatal("cursor with no recorded activity should remain visible")
+	}
+
+	v.lastCursorActivityAt = now
+	if v.cursorIdle(now.Add(cursorIdleDelay - time.Millisecond)) {
+		t.Fatal("cursor became idle before the delay elapsed")
+	}
+	if !v.cursorIdle(now.Add(cursorIdleDelay)) {
+		t.Fatal("cursor did not become idle after the delay elapsed")
+	}
+
+	v.lastCursorActivityAt = now.Add(cursorIdleDelay)
+	if v.cursorIdle(now.Add(cursorIdleDelay)) {
+		t.Fatal("new mouse activity did not wake the cursor")
+	}
+}
 
 func TestCircleCompareRotationPreservesImageSelection(t *testing.T) {
 	for _, reversed := range []bool{false, true} {

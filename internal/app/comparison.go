@@ -262,17 +262,22 @@ func (v *Viewer) sliderDragBounds() (float64, float64) {
 	return float64(imageRect.Min.X), float64(imageRect.Max.X - 1)
 }
 
-func (v *Viewer) updateCursorShape(mouseX, mouseY int, imageRect stdimage.Rectangle, imageReady bool) {
-	if v.compareMask == compareMaskCircle {
-		if v.circleBorderOpacity <= 0 {
-			ebiten.SetCursorMode(ebiten.CursorModeHidden)
-		} else {
-			ebiten.SetCursorMode(ebiten.CursorModeVisible)
-		}
+func (v *Viewer) cursorIdle(now time.Time) bool {
+	return !v.lastCursorActivityAt.IsZero() && now.Sub(v.lastCursorActivityAt) >= cursorIdleDelay
+}
+
+func (v *Viewer) updateCursorShape(now time.Time, mouseX, mouseY int, imageRect stdimage.Rectangle, imageReady bool) {
+	if v.cursorIdle(now) {
+		ebiten.SetCursorMode(ebiten.CursorModeHidden)
 		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
 		return
 	}
+
 	ebiten.SetCursorMode(ebiten.CursorModeVisible)
+	if v.compareMask == compareMaskCircle {
+		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
+		return
+	}
 
 	if v.mode != displayModeCompare || v.imageA == nil || v.imageB == nil || !imageReady {
 		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
