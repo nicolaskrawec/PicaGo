@@ -16,7 +16,8 @@ const (
 	thumbnailCurrentHeight = 90
 	thumbnailGap           = 2
 	thumbnailBottomMargin  = 10
-	thumbnailMaxRadius     = 4
+	thumbnailMaxRadius     = 8
+	thumbnailPreloadRadius = 16
 )
 
 type thumbnailResult struct {
@@ -26,8 +27,9 @@ type thumbnailResult struct {
 }
 
 type thumbnailCacheEntry struct {
-	texture  *ebiten.Image
-	lastUsed uint64
+	texture       *ebiten.Image
+	lastUsed      uint64
+	fadeStartedAt time.Time
 }
 
 type thumbnailItem struct {
@@ -105,7 +107,7 @@ func (v *Viewer) wantedThumbnailPaths() []string {
 	if err != nil || currentIndex < 0 {
 		return nil
 	}
-	radius := thumbnailRadius(v.windowWidth)
+	radius := thumbnailPreloadRadius
 	paths := make([]string, 0, radius*2+1)
 	paths = append(paths, images[currentIndex])
 	for distance := 1; distance <= radius; distance++ {
@@ -129,7 +131,27 @@ func (v *Viewer) ensureVisibleThumbnails() {
 		v.clearThumbnailCache()
 		v.thumbnailDirectory = dir
 	}
-	for _, path := range paths {
+	if len(paths) == 0 {
+		return
+	}
+
+	// The active thumbnail is a hard priority: do not start its neighbors
+	// until it has completed (or failed). This keeps a slow portrait/landscape
+	// decode from appearing after less important previews.
+	currentPath := paths[0]
+	if entry := v.thumbnailCache[currentPath]; entry != nil {
+		v.touchThumbnail(entry)
+	} else if !v.thumbnailFailed[currentPath] {
+		if !v.thumbnailInFlight[currentPath] {
+			v.startThumbnailLoad(currentPath)
+		}
+		return
+	}
+
+	// wantedThumbnailPaths is ordered current, left 1, right 1, left 2,
+	// right 2, ... . Only start work while a decoder is genuinely available;
+	// no waiting goroutine can race ahead of that priority order.
+	for _, path := range paths[1:] {
 		if entry := v.thumbnailCache[path]; entry != nil {
 			v.touchThumbnail(entry)
 			continue
@@ -137,15 +159,23 @@ func (v *Viewer) ensureVisibleThumbnails() {
 		if v.thumbnailInFlight[path] || v.thumbnailFailed[path] {
 			continue
 		}
-		v.thumbnailInFlight[path] = true
-		go func(path string) {
-			v.thumbnailSlots <- struct{}{}
-			thumbnail, err := imagedata.DecodeFileThumbnail(path, thumbnailMaxDimension)
-			<-v.thumbnailSlots
-			v.thumbnailResults <- thumbnailResult{path: path, image: thumbnail, err: err}
-			ebiten.ScheduleFrame()
-		}(path)
+		if len(v.thumbnailInFlight) >= thumbnailWorkerLimit {
+			continue
+		}
+		v.startThumbnailLoad(path)
 	}
+}
+
+func (v *Viewer) startThumbnailLoad(path string) {
+	if path == "" || v.thumbnailInFlight[path] || len(v.thumbnailInFlight) >= thumbnailWorkerLimit {
+		return
+	}
+	v.thumbnailInFlight[path] = true
+	go func() {
+		thumbnail, err := imagedata.DecodeFileThumbnail(path, thumbnailMaxDimension)
+		v.thumbnailResults <- thumbnailResult{path: path, image: thumbnail, err: err}
+		ebiten.ScheduleFrame()
+	}()
 }
 
 func (v *Viewer) collectThumbnails() {
@@ -165,7 +195,10 @@ func (v *Viewer) collectThumbnails() {
 				continue
 			}
 			v.evictThumbnailIfNeeded()
-			entry := &thumbnailCacheEntry{texture: ebiten.NewImageFromImage(result.image)}
+			entry := &thumbnailCacheEntry{
+				texture:       ebiten.NewImageFromImage(result.image),
+				fadeStartedAt: time.Now(),
+			}
 			v.touchThumbnail(entry)
 			v.thumbnailCache[result.path] = entry
 		default:
@@ -228,28 +261,51 @@ func (v *Viewer) drawThumbnailStrip(screen *ebiten.Image) {
 		return
 	}
 
+	now := time.Now()
 	for _, item := range items {
 		if !item.current {
-			v.drawThumbnailItem(screen, item)
+			v.drawThumbnailItem(screen, item, now)
 		}
 	}
 	for _, item := range items {
 		if item.current {
-			v.drawThumbnailItem(screen, item)
+			v.drawThumbnailItem(screen, item, now)
 			break
 		}
 	}
 }
 
-func (v *Viewer) drawThumbnailItem(screen *ebiten.Image, item thumbnailItem) {
-	itemOpacity := thumbnailItemOpacity(item.distance) * v.thumbnailOpacity
-	texture := (*ebiten.Image)(nil)
-	if entry := v.thumbnailCache[item.path]; entry != nil {
-		texture = entry.texture
-	} else if item.current && v.imageA != nil && item.path == v.imageA.FilePath {
-		texture = v.imageA.GPUTexture
+func (v *Viewer) drawThumbnailItem(screen *ebiten.Image, item thumbnailItem, now time.Time) {
+	entry := v.thumbnailCache[item.path]
+	if entry == nil || entry.texture == nil {
+		return
 	}
-	drawThumbnailTexture(screen, texture, item.rect, itemOpacity)
+	itemOpacity := thumbnailItemOpacity(item.distance) * v.thumbnailOpacity * thumbnailLoadOpacity(entry, now)
+	drawThumbnailTexture(screen, entry.texture, item.rect, itemOpacity)
+}
+
+func thumbnailLoadOpacity(entry *thumbnailCacheEntry, now time.Time) float64 {
+	if entry == nil {
+		return 0
+	}
+	if entry.fadeStartedAt.IsZero() || !now.Before(entry.fadeStartedAt.Add(thumbnailLoadFadeDuration)) {
+		return 1
+	}
+	progress := clampFloat64(float64(now.Sub(entry.fadeStartedAt))/float64(thumbnailLoadFadeDuration), 0, 1)
+	// Smoothstep keeps both ends of the fade soft while remaining deterministic.
+	return progress * progress * (3 - 2*progress)
+}
+
+func (v *Viewer) thumbnailLoadFadeActive(now time.Time) bool {
+	if v.thumbnailOpacity <= 0 {
+		return false
+	}
+	for _, entry := range v.thumbnailCache {
+		if entry != nil && thumbnailLoadOpacity(entry, now) < 1 {
+			return true
+		}
+	}
+	return false
 }
 
 func thumbnailItemOpacity(distance int) float64 {

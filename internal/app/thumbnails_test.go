@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -28,12 +29,26 @@ func TestCurrentThumbnailRemainsCentered(t *testing.T) {
 	t.Fatal("current thumbnail is missing")
 }
 
+func TestThumbnailStripDisplaysEightImagesOnEachSide(t *testing.T) {
+	images := make([]string, 17)
+	for index := range images {
+		images[index] = fmt.Sprintf("%02d", index)
+	}
+	items := visibleThumbnailItems(images, 8, 1280, 720)
+	if len(items) != 17 {
+		t.Fatalf("visible thumbnails = %d, want 17", len(items))
+	}
+	if !items[8].current {
+		t.Fatal("middle thumbnail is not the current image")
+	}
+}
+
 func TestThumbnailStripKeepsCenterAtDirectoryEdges(t *testing.T) {
 	images := []string{"0", "1", "2", "3", "4", "5"}
 	for _, currentIndex := range []int{0, len(images) - 1} {
 		items := visibleThumbnailItems(images, currentIndex, 1280, 720)
-		if len(items) != 5 {
-			t.Fatalf("index %d: visible thumbnails = %d, want 5", currentIndex, len(items))
+		if len(items) != len(images) {
+			t.Fatalf("index %d: visible thumbnails = %d, want %d", currentIndex, len(items), len(images))
 		}
 		for _, item := range items {
 			if item.current {
@@ -99,6 +114,31 @@ func TestThumbnailOpacityDecreasesWithDistance(t *testing.T) {
 	}
 }
 
+func TestThumbnailLoadFadeProgress(t *testing.T) {
+	startedAt := time.Now()
+	entry := &thumbnailCacheEntry{fadeStartedAt: startedAt}
+	if got := thumbnailLoadOpacity(entry, startedAt); got != 0 {
+		t.Fatalf("opacity at fade start = %v, want 0", got)
+	}
+	if got := thumbnailLoadOpacity(entry, startedAt.Add(thumbnailLoadFadeDuration/2)); math.Abs(got-0.5) > 0.0001 {
+		t.Fatalf("opacity halfway through fade = %v, want 0.5", got)
+	}
+	if got := thumbnailLoadOpacity(entry, startedAt.Add(thumbnailLoadFadeDuration)); got != 1 {
+		t.Fatalf("opacity after fade = %v, want 1", got)
+	}
+}
+
+func TestThumbnailLoadFadesAreIndependent(t *testing.T) {
+	now := time.Now()
+	older := &thumbnailCacheEntry{fadeStartedAt: now.Add(-thumbnailLoadFadeDuration * 3 / 4)}
+	newer := &thumbnailCacheEntry{fadeStartedAt: now.Add(-thumbnailLoadFadeDuration / 4)}
+	olderOpacity := thumbnailLoadOpacity(older, now)
+	newerOpacity := thumbnailLoadOpacity(newer, now)
+	if olderOpacity <= newerOpacity {
+		t.Fatalf("older opacity %v should exceed newer opacity %v", olderOpacity, newerOpacity)
+	}
+}
+
 func TestThumbnailsUseTwoPixelSpacing(t *testing.T) {
 	current := thumbnailRect(1000, 700, 0)
 	next := thumbnailRect(1000, 700, 1)
@@ -154,5 +194,31 @@ func TestThumbnailIsClickableDuringFadeInAndGapsAreReserved(t *testing.T) {
 	v.thumbnailOpacity = 0
 	if _, ok := v.thumbnailPathAt(x, y); ok {
 		t.Fatal("fully hidden thumbnail remained clickable")
+	}
+}
+
+func TestThumbnailPreloadsSixteenImagesOnEachSide(t *testing.T) {
+	dir := t.TempDir()
+	paths := make([]string, 41)
+	for index := range paths {
+		paths[index] = filepath.Join(dir, fmt.Sprintf("%02d.png", index))
+		if err := os.WriteFile(paths[index], nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v := Viewer{imageA: &imagedata.LoadedImage{FilePath: paths[20]}}
+	wanted := v.wantedThumbnailPaths()
+	wantCount := thumbnailPreloadRadius*2 + 1
+	if len(wanted) != wantCount {
+		t.Fatalf("preloaded thumbnail paths = %d, want %d", len(wanted), wantCount)
+	}
+	if wanted[0] != paths[20] {
+		t.Fatalf("first preloaded path = %q, want current %q", wanted[0], paths[20])
+	}
+	wantStart := []string{paths[20], paths[19], paths[21], paths[18], paths[22], paths[17], paths[23]}
+	for index, want := range wantStart {
+		if wanted[index] != want {
+			t.Fatalf("preload priority %d = %q, want %q", index, wanted[index], want)
+		}
 	}
 }

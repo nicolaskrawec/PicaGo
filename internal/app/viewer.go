@@ -82,9 +82,10 @@ const defaultCircleMaskDiameterRatio = 0.1
 const prefetchedImageCacheLimit = 3
 const viewChangeAnimationDuration = 250 * time.Millisecond
 const thumbnailMaxDimension = 128
-const thumbnailCacheLimit = 16
+const thumbnailCacheLimit = 64
 const thumbnailWorkerLimit = 2
 const thumbnailRevealDistance = 120
+const thumbnailLoadFadeDuration = 220 * time.Millisecond
 
 // Temporary diagnostic switch: keep the screen-sized texture only so we can
 // verify whether full-resolution GPU uploads cause navigation stalls.
@@ -209,7 +210,6 @@ type Viewer struct {
 	prefetchedImages           map[string]*imagedata.DecodedImage
 	prefetchOrder              []string
 	thumbnailResults           chan thumbnailResult
-	thumbnailSlots             chan struct{}
 	thumbnailInFlight          map[string]bool
 	thumbnailFailed            map[string]bool
 	thumbnailCache             map[string]*thumbnailCacheEntry
@@ -261,7 +261,6 @@ func Run(args []string) error {
 		prefetchSlots:       make(chan struct{}, 2),
 		prefetchedImages:    make(map[string]*imagedata.DecodedImage),
 		thumbnailResults:    make(chan thumbnailResult, thumbnailCacheLimit),
-		thumbnailSlots:      make(chan struct{}, thumbnailWorkerLimit),
 		thumbnailInFlight:   make(map[string]bool),
 		thumbnailFailed:     make(map[string]bool),
 		thumbnailCache:      make(map[string]*thumbnailCacheEntry),
