@@ -1,6 +1,7 @@
 package app
 
 import (
+	"image"
 	"testing"
 	"time"
 
@@ -27,6 +28,38 @@ func TestCursorBecomesIdleAfterDelay(t *testing.T) {
 	v.lastCursorActivityAt = now.Add(cursorIdleDelay)
 	if v.cursorIdle(now.Add(cursorIdleDelay)) {
 		t.Fatal("new mouse activity did not wake the cursor")
+	}
+}
+
+func TestSplitGuideFollowsCursorActivityRegardlessOfPosition(t *testing.T) {
+	now := time.Now()
+	v := Viewer{
+		compareMask:         compareMaskSplit,
+		lastCompareBorderAt: now,
+	}
+	imageRect := image.Rect(100, 100, 500, 500)
+
+	if !v.shouldShowSlider(now, imageRect) {
+		t.Fatal("split guide should be visible after mouse activity")
+	}
+	if v.shouldShowSlider(now.Add(cursorIdleDelay), imageRect) {
+		t.Fatal("split guide should be hidden when the cursor becomes idle")
+	}
+}
+
+func TestSplitCommandsWakeGuideWithoutWakingCursor(t *testing.T) {
+	v := Viewer{
+		compareMask:          compareMaskSplit,
+		lastCompareBorderAt:  time.Now().Add(-cursorIdleDelay),
+		lastCursorActivityAt: time.Now().Add(-cursorIdleDelay),
+	}
+
+	v.setCompareOrientation(compare.OrientationHorizontal)
+	if v.splitGuideIdle(time.Now()) {
+		t.Fatal("H/V command did not wake the split guide")
+	}
+	if !v.cursorIdle(time.Now()) {
+		t.Fatal("H/V command should not wake the mouse cursor")
 	}
 }
 

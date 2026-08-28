@@ -46,6 +46,7 @@ func (v *Viewer) setSliderOrientation(orientation compare.Orientation) {
 }
 
 func (v *Viewer) setCompareOrientation(orientation compare.Orientation) {
+	v.markCompareBorderActivity(time.Now())
 	wasCircle := v.compareMask == compareMaskCircle
 	v.compareMask = compareMaskSplit
 	if v.slider.Orientation == orientation {
@@ -310,33 +311,18 @@ func (v *Viewer) sliderNearCursor(mouseX, mouseY int, imageRect stdimage.Rectang
 	return math.Abs(float64(mouseX)-effectiveSliderPos) <= 15
 }
 
-func (v *Viewer) shouldShowSlider(now time.Time, mouseX, mouseY int, imageRect stdimage.Rectangle) bool {
+func (v *Viewer) shouldShowSlider(now time.Time, imageRect stdimage.Rectangle) bool {
 	if imageRect.Empty() {
 		return false
 	}
 	if v.compareMask == compareMaskCircle {
 		return v.draggingImage || v.draggingSlider || v.lastCompareBorderAt.IsZero() || now.Sub(v.lastCompareBorderAt) < compareBorderIdleDelay
 	}
-	if v.compareMask == compareMaskSplit {
-		if v.draggingSlider {
-			return true
-		}
-		if v.sliderNearCursor(mouseX, mouseY, imageRect) {
-			recentActivity := v.lastCompareBorderAt.IsZero() || now.Sub(v.lastCompareBorderAt) < compareBorderIdleDelay
-			return recentActivity
-		}
-	}
-	if v.draggingSlider || v.sliderNearCursor(mouseX, mouseY, imageRect) {
-		return true
-	}
+	return v.draggingSlider || !v.splitGuideIdle(now)
+}
 
-	if v.slider.Orientation == compare.OrientationHorizontal {
-		effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.Y), float64(imageRect.Max.Y-1))
-		return effectiveSliderPos <= float64(imageRect.Min.Y) || effectiveSliderPos >= float64(imageRect.Max.Y-1)
-	}
-
-	effectiveSliderPos := clampSliderPosition(v.slider.Position, float64(imageRect.Min.X), float64(imageRect.Max.X-1))
-	return effectiveSliderPos <= float64(imageRect.Min.X) || effectiveSliderPos >= float64(imageRect.Max.X-1)
+func (v *Viewer) splitGuideIdle(now time.Time) bool {
+	return !v.lastCompareBorderAt.IsZero() && now.Sub(v.lastCompareBorderAt) >= cursorIdleDelay
 }
 
 func (v *Viewer) canStartSliderDragFromOutside(mouseX, mouseY int, imageRect stdimage.Rectangle) bool {
@@ -372,10 +358,10 @@ func (v *Viewer) sliderAtImageEdge(imageRect stdimage.Rectangle) bool {
 	return effectiveSliderPos <= float64(imageRect.Min.X) || effectiveSliderPos >= float64(imageRect.Max.X-1)
 }
 
-func (v *Viewer) updateCompareGuideVisibility(now time.Time, mouseX, mouseY int, imageRect stdimage.Rectangle, imageReady bool) {
+func (v *Viewer) updateCompareGuideVisibility(now time.Time, imageRect stdimage.Rectangle, imageReady bool) {
 	if v.compareMask == compareMaskCircle {
 		targetOpacity := 0.0
-		if v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && v.shouldShowSlider(now, mouseX, mouseY, imageRect) {
+		if v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && v.shouldShowSlider(now, imageRect) {
 			targetOpacity = 1
 		}
 		v.circleBorderOpacity = approachOpacity(v.circleBorderOpacity, targetOpacity)
@@ -386,7 +372,7 @@ func (v *Viewer) updateCompareGuideVisibility(now time.Time, mouseX, mouseY int,
 	v.circleBorderOpacity = 0
 
 	targetOpacity := 0.0
-	if v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && v.shouldShowSlider(now, mouseX, mouseY, imageRect) {
+	if v.mode == displayModeCompare && v.imageA != nil && v.imageB != nil && imageReady && v.shouldShowSlider(now, imageRect) {
 		targetOpacity = 1
 	}
 

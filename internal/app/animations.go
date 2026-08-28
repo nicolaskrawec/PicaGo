@@ -308,6 +308,9 @@ func (v *Viewer) shouldStayActive(now time.Time, mouseMoved, leftMousePressed, r
 	if v.sliderOpacity > 0 && v.sliderOpacity < 1 {
 		return true
 	}
+	if v.compareMask == compareMaskSplit && v.sliderOpacity > 0 && !v.splitGuideIdle(now) {
+		return true
+	}
 
 	if v.compareMask == compareMaskCircle && v.circleBorderOpacity > 0 {
 		return true

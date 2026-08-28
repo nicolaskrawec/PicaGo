@@ -362,7 +362,7 @@ func (v *Viewer) Update() error {
 		v.applySliderSync(syncRect)
 	}
 
-	v.updateCompareGuideVisibility(now, mouseX, mouseY, imageRect, imageReady)
+	v.updateCompareGuideVisibility(now, imageRect, imageReady)
 
 	v.updateSoloPreview(ebiten.IsKeyPressed(ebiten.Key1), ebiten.IsKeyPressed(ebiten.Key2))
 
