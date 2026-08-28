@@ -114,6 +114,15 @@ func TestThumbnailOpacityDecreasesWithDistance(t *testing.T) {
 	}
 }
 
+func TestHoveredThumbnailUsesFullOpacity(t *testing.T) {
+	if got := thumbnailItemDisplayOpacity(4, true); got != 1 {
+		t.Fatalf("hovered opacity = %v, want 1", got)
+	}
+	if got, want := thumbnailItemDisplayOpacity(4, false), thumbnailItemOpacity(4); got != want {
+		t.Fatalf("opacity after hover = %v, want %v", got, want)
+	}
+}
+
 func TestThumbnailLoadFadeProgress(t *testing.T) {
 	startedAt := time.Now()
 	entry := &thumbnailCacheEntry{fadeStartedAt: startedAt}

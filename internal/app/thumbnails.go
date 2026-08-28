@@ -280,7 +280,8 @@ func (v *Viewer) drawThumbnailItem(screen *ebiten.Image, item thumbnailItem, now
 	if entry == nil || entry.texture == nil {
 		return
 	}
-	itemOpacity := thumbnailItemOpacity(item.distance) * v.thumbnailOpacity * thumbnailLoadOpacity(entry, now)
+	hovered := item.path == v.hoveredThumbnailPath
+	itemOpacity := thumbnailItemDisplayOpacity(item.distance, hovered) * v.thumbnailOpacity * thumbnailLoadOpacity(entry, now)
 	drawThumbnailTexture(screen, entry.texture, item.rect, itemOpacity)
 }
 
@@ -310,6 +311,13 @@ func (v *Viewer) thumbnailLoadFadeActive(now time.Time) bool {
 
 func thumbnailItemOpacity(distance int) float64 {
 	return clampFloat64(0.8-float64(distance)*0.1, 0, 0.8)
+}
+
+func thumbnailItemDisplayOpacity(distance int, hovered bool) float64 {
+	if hovered {
+		return 1
+	}
+	return thumbnailItemOpacity(distance)
 }
 
 func drawThumbnailTexture(screen, texture *ebiten.Image, bounds stdimage.Rectangle, opacity float64) {
@@ -380,6 +388,10 @@ func (v *Viewer) updateThumbnailVisibility(now time.Time, mouseX, mouseY int) {
 		targetOpacity = 1
 	}
 	v.thumbnailOpacity = approachOpacity(v.thumbnailOpacity, targetOpacity)
+	v.hoveredThumbnailPath = ""
+	if path, ok := v.thumbnailPathAt(mouseX, mouseY); ok {
+		v.hoveredThumbnailPath = path
+	}
 }
 
 func (v *Viewer) shouldShowThumbnails(now time.Time, mouseX, mouseY int) bool {

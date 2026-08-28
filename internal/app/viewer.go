@@ -216,6 +216,7 @@ type Viewer struct {
 	thumbnailUseCounter        uint64
 	thumbnailDirectory         string
 	thumbnailOpacity           float64
+	hoveredThumbnailPath       string
 	pendingHighRes             [2]*pendingHighResImage
 	initialPrefetchPending     bool
 	navigationDirectory        string
