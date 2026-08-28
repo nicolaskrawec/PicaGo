@@ -78,6 +78,29 @@ func DecodeFileForDisplay(path string, maxDimension int) (*DecodedImage, error) 
 	return decodeFromReader(file, filepath.Base(path), path, maxDimension)
 }
 
+// DecodeFileThumbnail decodes a file and retains only a small, display-ready
+// image. The full-size decode is released before returning so thumbnail caches
+// never keep the original pixels alive.
+func DecodeFileThumbnail(path string, maxDimension int) (stddraw.Image, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	decoded, err := decodeFromReader(file, filepath.Base(path), path, maxDimension)
+	if err != nil {
+		return nil, err
+	}
+	thumbnail := decoded.Preview
+	if thumbnail == nil {
+		thumbnail = decoded.Image
+	}
+	decoded.Image = nil
+	decoded.Preview = nil
+	return thumbnail, nil
+}
+
 func LoadFS(fsys fs.FS, path string) (*LoadedImage, error) {
 	decoded, err := DecodeFS(fsys, path)
 	if err != nil {

@@ -20,6 +20,8 @@ func (v *Viewer) Update() error {
 	v.collectAsyncImageLoads()
 	v.promotePendingHighResImages()
 	v.collectPrefetchedImages()
+	v.collectThumbnails()
+	v.ensureVisibleThumbnails()
 
 	if v.pendingInitialBorderless {
 		v.enterFromNativeMaximize = false
@@ -174,6 +176,7 @@ func (v *Viewer) Update() error {
 	}
 	v.idleMouseX = mouseX
 	v.idleMouseY = mouseY
+	v.updateThumbnailVisibility(now, mouseX, mouseY)
 	mouseOutsideWindow := mouseX < 0 || mouseY < 0 || mouseX >= v.windowWidth || mouseY >= v.windowHeight
 	if v.ignoreMouseUntilRelease {
 		if leftMousePressed || rightMousePressed {
@@ -191,6 +194,13 @@ func (v *Viewer) Update() error {
 	if leftMousePressed && !v.leftMouseDown {
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			v.rotateImage(-1)
+			v.leftMouseDown = true
+			return nil
+		}
+		if path, ok := v.thumbnailPathAt(mouseX, mouseY); ok {
+			if v.imageA == nil || path != v.imageA.FilePath {
+				v.loadNavigationImage(path)
+			}
 			v.leftMouseDown = true
 			return nil
 		}
@@ -326,7 +336,7 @@ func (v *Viewer) Update() error {
 			} else {
 				v.rotateImage(1)
 			}
-		} else if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
+		} else if imageReady && (v.pointInThumbnailStrip(mouseX, mouseY) || pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight)) {
 			if wheelDelta > 0 {
 				_ = v.loadAdjacentImage(-1)
 			} else {

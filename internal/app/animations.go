@@ -286,6 +286,9 @@ func (v *Viewer) shouldStayActive(now time.Time, mouseMoved, leftMousePressed, r
 	if len(v.prefetchInFlight) > 0 {
 		return true
 	}
+	if len(v.thumbnailInFlight) > 0 {
+		return true
+	}
 
 	if v.viewAnimationActive {
 		return true
@@ -313,6 +316,9 @@ func (v *Viewer) shouldStayActive(now time.Time, mouseMoved, leftMousePressed, r
 	}
 
 	if v.compareMask == compareMaskCircle && v.circleBorderOpacity > 0 {
+		return true
+	}
+	if v.thumbnailOpacity > 0 && v.thumbnailOpacity < 1 {
 		return true
 	}
 

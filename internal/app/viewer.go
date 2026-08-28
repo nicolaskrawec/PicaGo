@@ -83,6 +83,10 @@ const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
 const prefetchedImageCacheLimit = 3
 const viewChangeAnimationDuration = 250 * time.Millisecond
+const thumbnailMaxDimension = 128
+const thumbnailCacheLimit = 16
+const thumbnailWorkerLimit = 2
+const thumbnailRevealDistance = 120
 
 // Temporary diagnostic switch: keep the screen-sized texture only so we can
 // verify whether full-resolution GPU uploads cause navigation stalls.
@@ -206,6 +210,14 @@ type Viewer struct {
 	prefetchSlots              chan struct{}
 	prefetchedImages           map[string]*imagedata.DecodedImage
 	prefetchOrder              []string
+	thumbnailResults           chan thumbnailResult
+	thumbnailSlots             chan struct{}
+	thumbnailInFlight          map[string]bool
+	thumbnailFailed            map[string]bool
+	thumbnailCache             map[string]*thumbnailCacheEntry
+	thumbnailUseCounter        uint64
+	thumbnailDirectory         string
+	thumbnailOpacity           float64
 	pendingHighRes             [2]*pendingHighResImage
 	initialPrefetchPending     bool
 	navigationDirectory        string
@@ -250,6 +262,11 @@ func Run(args []string) error {
 		prefetchInFlight:    make(map[string]bool),
 		prefetchSlots:       make(chan struct{}, 2),
 		prefetchedImages:    make(map[string]*imagedata.DecodedImage),
+		thumbnailResults:    make(chan thumbnailResult, thumbnailCacheLimit),
+		thumbnailSlots:      make(chan struct{}, thumbnailWorkerLimit),
+		thumbnailInFlight:   make(map[string]bool),
+		thumbnailFailed:     make(map[string]bool),
+		thumbnailCache:      make(map[string]*thumbnailCacheEntry),
 		imageViewStates:     loadImageViewStates(),
 	}
 
@@ -380,8 +397,9 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 		v.windowHeight,
 		pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance),
 		pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance),
-		v.imageA != nil && !v.pendingResetFit && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight),
+		false,
 	)
+	v.drawThumbnailStrip(screen)
 
 	if v.showHelp {
 		v.drawHelpOverlay(screen)

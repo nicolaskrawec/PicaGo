@@ -174,7 +174,8 @@ func (v *Viewer) memoryStatusText() string {
 		return strconv.FormatUint(value/(1024*1024), 10) + " MiB"
 	}
 	return "alloc " + toMiB(stats.Alloc) + " / heap " + toMiB(stats.HeapInuse) + " / sys " + toMiB(stats.Sys) +
-		" / cache " + strconv.Itoa(len(v.prefetchedImages)) + " / active " + strconv.Itoa(len(v.prefetchInFlight))
+		" / cache " + strconv.Itoa(len(v.prefetchedImages)) + " / active " + strconv.Itoa(len(v.prefetchInFlight)) +
+		" / thumbs " + strconv.Itoa(len(v.thumbnailCache)) + "/" + strconv.Itoa(len(v.thumbnailInFlight))
 }
 
 func (v *Viewer) prefetchStatusText() string {

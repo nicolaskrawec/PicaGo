@@ -16,6 +16,9 @@ QA. The interface stays out of the way until you need it.
 - Fast image opening and fluid folder navigation.
 - Open an image from the command line or drop images and folders into the window.
 - Navigate through every supported image in the current folder.
+- Browse a centered bottom strip of asynchronously loaded, memory-bounded
+  thumbnails; it appears near the bottom edge, hides after mouse inactivity,
+  and lets you click a neighboring thumbnail to open it directly.
 - Smooth cursor-centered zoom, 100% view, fit-to-window and mouse panning.
 - Animated clockwise and counter-clockwise rotation.
 - Animated horizontal and vertical mirroring.
@@ -45,7 +48,8 @@ files as images A and B, while dropping a folder opens its first supported
 image.
 
 Use the left and right arrows, or the bottom action bar, to browse neighboring
-images in the same directory.
+images in the same directory. The current image stays centered in the thumbnail
+strip, with previous images on the left and following images on the right.
 
 ## Comparison Mode
 
@@ -98,6 +102,7 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Top-right + left click`: quit.
 - `Bottom bar + left click/wheel up`: previous image.
 - `Bottom bar + right click/wheel down`: next image.
+- `Thumbnail strip + left click`: open that image directly.
 
 ### Keyboard
 
