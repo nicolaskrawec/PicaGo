@@ -27,16 +27,6 @@ func pointInTopLeftCorner(x, y, tolerance int) bool {
 	return x >= 0 && x < tolerance && y >= 0 && y < tolerance
 }
 
-func pointInBottomBar(x, y, windowWidth, windowHeight int) bool {
-	if windowWidth <= 0 || windowHeight <= 0 {
-		return false
-	}
-	return x >= bottomCommandCornerWidth &&
-		x < windowWidth-bottomCommandCornerWidth &&
-		y >= windowHeight-bottomCommandHeight &&
-		y < windowHeight
-}
-
 func absInt(value int) int {
 	if value < 0 {
 		return -value
@@ -174,7 +164,8 @@ func (v *Viewer) memoryStatusText() string {
 		return strconv.FormatUint(value/(1024*1024), 10) + " MiB"
 	}
 	return "alloc " + toMiB(stats.Alloc) + " / heap " + toMiB(stats.HeapInuse) + " / sys " + toMiB(stats.Sys) +
-		" / cache " + strconv.Itoa(len(v.prefetchedImages)) + " / active " + strconv.Itoa(len(v.prefetchInFlight))
+		" / cache " + strconv.Itoa(len(v.prefetchedImages)) + " / active " + strconv.Itoa(len(v.prefetchInFlight)) +
+		" / thumbs " + strconv.Itoa(len(v.thumbnailCache)) + "/" + strconv.Itoa(len(v.thumbnailInFlight))
 }
 
 func (v *Viewer) prefetchStatusText() string {

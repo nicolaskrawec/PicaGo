@@ -75,13 +75,17 @@ type pendingHighResImage struct {
 const idleFrameDelay = 500 * time.Millisecond
 const targetTPS = 120
 const compareBorderIdleDelay = 600 * time.Millisecond
+const cursorIdleDelay = 2 * time.Second
 const cornerCommandTolerance = 25
-const bottomCommandHeight = 40
-const bottomCommandCornerWidth = 50
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
 const prefetchedImageCacheLimit = 3
 const viewChangeAnimationDuration = 250 * time.Millisecond
+const thumbnailMaxDimension = 128
+const thumbnailCacheLimit = 64
+const thumbnailWorkerLimit = 2
+const thumbnailRevealDistance = 120
+const thumbnailLoadFadeDuration = 220 * time.Millisecond
 
 // Temporary diagnostic switch: keep the screen-sized texture only so we can
 // verify whether full-resolution GPU uploads cause navigation stalls.
@@ -145,77 +149,89 @@ type Viewer struct {
 	viewportBaseWidth     int
 	viewportBaseHeight    int
 
-	borderlessMaximized       bool
-	pendingInitialBorderless  bool
-	pendingEnterFullscreen    bool
-	enterFromNativeMaximize   bool
-	fullscreenOriginX         int
-	fullscreenOriginY         int
-	pendingResetFit           bool
-	skipNextFitAnimation      bool
-	windowedPosX              int
-	windowedPosY              int
-	windowedWidth             int
-	windowedHeight            int
-	hasWindowedState          bool
-	restoreClickPending       bool
-	restoreClickStartX        int
-	restoreClickStartY        int
-	lastImageClickAt          time.Time
-	lastImageClickX           int
-	lastImageClickY           int
-	lastActivityAt            time.Time
-	slideshowPlaying          bool
-	nextSlideshowAt           time.Time
-	idleFPSMode               bool
-	idleMouseTracked          bool
-	idleMouseX                int
-	idleMouseY                int
-	viewAnimationActive       bool
-	viewAnimationStart        time.Time
-	viewAnimationLength       time.Duration
-	viewAnimationDelayUntil   time.Time
-	viewAnimationFrom         render.View
-	viewAnimationTo           render.View
-	animateInitialFit         bool
-	openingAnimationActive    bool
-	openingAnimationStart     time.Time
-	rotationAnimationActive   bool
-	rotationAnimationStart    time.Time
-	rotationAnimationFrom     float64
-	rotationAnimationTo       float64
-	rotationSplitLocalSide    int
-	rotationSplitLocalRatio   float64
-	pendingRotationTurns      int
-	mirrorAnimationActive     bool
-	mirrorAnimationStart      time.Time
-	mirrorAnimationFrom       float64
-	mirrorAnimationTo         float64
-	mirrorAnimationHorizontal bool
-	nextImageLoadID           int
-	pendingImageLoadAID       int
-	pendingImageLoadBID       int
-	imageLoadResults          chan asyncImageResult
-	prefetchResults           chan prefetchedImageResult
-	prefetchInFlight          map[string]bool
-	prefetchSlots             chan struct{}
-	prefetchedImages          map[string]*imagedata.DecodedImage
-	prefetchOrder             []string
-	pendingHighRes            [2]*pendingHighResImage
-	initialPrefetchPending    bool
-	navigationDirectory       string
-	navigationImages          []string
-	imageViewStates           map[string]render.View
-	loadingImageName          string
-	loadError                 string
-	desktopBackdrop           *ebiten.Image
-	desktopBackground         bool
-	background                backgroundMode
-	preferences               config
-	debugMode                 bool
-	centerInfoText            string
-	centerInfoUntil           time.Time
-	centerInfoTexture         *ebiten.Image
+	borderlessMaximized        bool
+	pendingInitialBorderless   bool
+	pendingEnterFullscreen     bool
+	enterFromNativeMaximize    bool
+	fullscreenOriginX          int
+	fullscreenOriginY          int
+	fullscreenZoomRestore      render.View
+	fullscreenZoomRestoreFit   bool
+	fullscreenZoomRestoreValid bool
+	pendingResetFit            bool
+	skipNextFitAnimation       bool
+	windowedPosX               int
+	windowedPosY               int
+	windowedWidth              int
+	windowedHeight             int
+	hasWindowedState           bool
+	restoreClickPending        bool
+	restoreClickStartX         int
+	restoreClickStartY         int
+	lastImageClickAt           time.Time
+	lastImageClickX            int
+	lastImageClickY            int
+	lastActivityAt             time.Time
+	slideshowPlaying           bool
+	nextSlideshowAt            time.Time
+	idleFPSMode                bool
+	idleMouseTracked           bool
+	idleMouseX                 int
+	idleMouseY                 int
+	lastCursorActivityAt       time.Time
+	viewAnimationActive        bool
+	viewAnimationStart         time.Time
+	viewAnimationLength        time.Duration
+	viewAnimationDelayUntil    time.Time
+	viewAnimationFrom          render.View
+	viewAnimationTo            render.View
+	animateInitialFit          bool
+	openingAnimationActive     bool
+	openingAnimationStart      time.Time
+	rotationAnimationActive    bool
+	rotationAnimationStart     time.Time
+	rotationAnimationFrom      float64
+	rotationAnimationTo        float64
+	rotationSplitLocalSide     int
+	rotationSplitLocalRatio    float64
+	pendingRotationTurns       int
+	mirrorAnimationActive      bool
+	mirrorAnimationStart       time.Time
+	mirrorAnimationFrom        float64
+	mirrorAnimationTo          float64
+	mirrorAnimationHorizontal  bool
+	nextImageLoadID            int
+	pendingImageLoadAID        int
+	pendingImageLoadBID        int
+	imageLoadResults           chan asyncImageResult
+	prefetchResults            chan prefetchedImageResult
+	prefetchInFlight           map[string]bool
+	prefetchSlots              chan struct{}
+	prefetchedImages           map[string]*imagedata.DecodedImage
+	prefetchOrder              []string
+	thumbnailResults           chan thumbnailResult
+	thumbnailInFlight          map[string]bool
+	thumbnailFailed            map[string]bool
+	thumbnailCache             map[string]*thumbnailCacheEntry
+	thumbnailUseCounter        uint64
+	thumbnailDirectory         string
+	thumbnailOpacity           float64
+	hoveredThumbnailPath       string
+	pendingHighRes             [2]*pendingHighResImage
+	initialPrefetchPending     bool
+	navigationDirectory        string
+	navigationImages           []string
+	imageViewStates            map[string]render.View
+	loadingImageName           string
+	loadError                  string
+	desktopBackdrop            *ebiten.Image
+	desktopBackground          bool
+	background                 backgroundMode
+	preferences                config
+	debugMode                  bool
+	centerInfoText             string
+	centerInfoUntil            time.Time
+	centerInfoTexture          *ebiten.Image
 }
 
 func Run(args []string) error {
@@ -245,6 +261,10 @@ func Run(args []string) error {
 		prefetchInFlight:    make(map[string]bool),
 		prefetchSlots:       make(chan struct{}, 2),
 		prefetchedImages:    make(map[string]*imagedata.DecodedImage),
+		thumbnailResults:    make(chan thumbnailResult, thumbnailCacheLimit),
+		thumbnailInFlight:   make(map[string]bool),
+		thumbnailFailed:     make(map[string]bool),
+		thumbnailCache:      make(map[string]*thumbnailCacheEntry),
 		imageViewStates:     loadImageViewStates(),
 	}
 
@@ -372,11 +392,10 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	drawCornerHints(
 		screen,
 		v.windowWidth,
-		v.windowHeight,
 		pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance),
 		pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance),
-		v.imageA != nil && !v.pendingResetFit && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight),
 	)
+	v.drawThumbnailStrip(screen)
 
 	if v.showHelp {
 		v.drawHelpOverlay(screen)
@@ -482,7 +501,7 @@ func drawCenterInfoFrame(dst *ebiten.Image, width, height float32) {
 	vector.FillPath(dst, path, &vector.FillOptions{}, options)
 }
 
-func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTopLeft, showTopRight, showBottomLeft bool) {
+func drawCornerHints(screen *ebiten.Image, windowWidth int, showTopLeft, showTopRight bool) {
 	const size = float32(40)
 	fill := color.NRGBA{48, 48, 48, cornerHintAlpha}
 	options := &vector.DrawPathOptions{AntiAlias: true}
@@ -512,18 +531,6 @@ func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTo
 		ebitenutil.DebugPrintAt(screen, "X", windowWidth-16, 8)
 	}
 
-	if showBottomLeft && windowWidth > 0 && windowHeight > 0 {
-		left := float32(0)
-		top := float32(maxInt(0, windowHeight-bottomCommandHeight))
-		width := float32(windowWidth)
-		height := float32(windowHeight) - top
-		options.ColorScale.Reset()
-		options.ColorScale.ScaleWithColor(fill)
-		vector.FillRect(screen, left, top, width, height, fill, true)
-		indicator := "< >"
-		indicatorWidth := len(indicator) * 6
-		ebitenutil.DebugPrintAt(screen, indicator, windowWidth/2-indicatorWidth/2, int(top)+12)
-	}
 }
 
 func (v *Viewer) Layout(outsideWidth, outsideHeight int) (int, int) {

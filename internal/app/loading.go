@@ -191,6 +191,7 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 		oldLoaded = v.imageA
 		oldDecoded = v.decodedA
 		v.imageA = loaded
+		v.fullscreenZoomRestoreValid = false
 		v.decodedA = decoded
 		if v.imageB == nil {
 			v.mode = displayModeSingleA
@@ -229,14 +230,21 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 		v.initialPrefetchPending = true
 	}
 
-	v.draggingImage = false
-	v.draggingSlider = false
-	v.leftMouseDown = false
-	v.restoreClickPending = false
+	v.resetInteractionForLoadedImage()
 	ebiten.SetWindowTitle(windowTitle(loaded.FileName))
 	if !(slot == asyncImageSlotA && animateFit) {
 		v.prefetchAdjacentImages()
 	}
+}
+
+func (v *Viewer) resetInteractionForLoadedImage() {
+	v.draggingImage = false
+	v.draggingSlider = false
+	v.restoreClickPending = false
+	// Keep leftMouseDown latched until Update observes the physical button
+	// release. Clearing it here can turn one long click into a second click if
+	// an asynchronous load completes while the button is still held and the
+	// thumbnail strip has already recentered around the new image.
 }
 
 func (v *Viewer) isCurrentImageLoad(slot asyncImageSlot, id int) bool {

@@ -264,11 +264,14 @@ func (v *Viewer) animateView() {
 	}
 }
 
-func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed bool) bool {
+func (v *Viewer) shouldStayActive(now time.Time, mouseMoved, leftMousePressed, rightMousePressed bool) bool {
 	if v.slideshowPlaying {
 		return true
 	}
 	if mouseMoved || leftMousePressed || rightMousePressed || v.draggingImage || v.draggingSlider || v.restoreClickPending {
+		return true
+	}
+	if !v.lastCursorActivityAt.IsZero() && !v.cursorIdle(now) {
 		return true
 	}
 
@@ -281,6 +284,9 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 	}
 
 	if len(v.prefetchInFlight) > 0 {
+		return true
+	}
+	if len(v.thumbnailInFlight) > 0 {
 		return true
 	}
 
@@ -305,8 +311,17 @@ func (v *Viewer) shouldStayActive(mouseMoved, leftMousePressed, rightMousePresse
 	if v.sliderOpacity > 0 && v.sliderOpacity < 1 {
 		return true
 	}
+	if v.compareMask == compareMaskSplit && v.sliderOpacity > 0 && !v.splitGuideIdle(now) {
+		return true
+	}
 
 	if v.compareMask == compareMaskCircle && v.circleBorderOpacity > 0 {
+		return true
+	}
+	if v.thumbnailOpacity > 0 && v.thumbnailOpacity < 1 {
+		return true
+	}
+	if v.thumbnailLoadFadeActive(now) {
 		return true
 	}
 

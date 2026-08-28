@@ -20,6 +20,8 @@ func (v *Viewer) Update() error {
 	v.collectAsyncImageLoads()
 	v.promotePendingHighResImages()
 	v.collectPrefetchedImages()
+	v.collectThumbnails()
+	v.ensureVisibleThumbnails()
 
 	if v.pendingInitialBorderless {
 		v.enterFromNativeMaximize = false
@@ -166,12 +168,15 @@ func (v *Viewer) Update() error {
 		mouseMoved = mouseX != v.idleMouseX || mouseY != v.idleMouseY
 	} else {
 		v.idleMouseTracked = true
+		v.lastCursorActivityAt = now
 	}
 	if mouseMoved || leftMousePressed || rightMousePressed {
 		v.markCompareBorderActivity(now)
+		v.lastCursorActivityAt = now
 	}
 	v.idleMouseX = mouseX
 	v.idleMouseY = mouseY
+	v.updateThumbnailVisibility(now, mouseX, mouseY)
 	mouseOutsideWindow := mouseX < 0 || mouseY < 0 || mouseX >= v.windowWidth || mouseY >= v.windowHeight
 	if v.ignoreMouseUntilRelease {
 		if leftMousePressed || rightMousePressed {
@@ -192,8 +197,16 @@ func (v *Viewer) Update() error {
 			v.leftMouseDown = true
 			return nil
 		}
-		if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
-			_ = v.loadAdjacentImage(-1)
+		if path, ok := v.thumbnailPathAt(mouseX, mouseY); ok {
+			if v.imageA == nil || path != v.imageA.FilePath {
+				v.loadNavigationImage(path)
+			}
+			v.leftMouseDown = true
+			return nil
+		}
+		// The gaps belong to the thumbnail strip too. Consume the click so it
+		// cannot fall through to the legacy bottom-bar navigation underneath.
+		if v.pointInThumbnailStrip(mouseX, mouseY) {
 			v.leftMouseDown = true
 			return nil
 		}
@@ -221,7 +234,7 @@ func (v *Viewer) Update() error {
 				absInt(mouseX-v.lastImageClickX) <= 4 &&
 				absInt(mouseY-v.lastImageClickY) <= 4 {
 				if v.borderlessMaximized {
-					v.restoreWindow()
+					v.toggleFullscreen100Zoom(float64(mouseX), float64(mouseY))
 				} else {
 					v.pendingEnterFullscreen = true
 				}
@@ -254,11 +267,6 @@ func (v *Viewer) Update() error {
 	if rightMousePressed && !v.rightMouseDown {
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			v.rotateImage(1)
-			v.rightMouseDown = true
-			return nil
-		}
-		if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
-			_ = v.loadAdjacentImage(1)
 			v.rightMouseDown = true
 			return nil
 		}
@@ -310,6 +318,7 @@ func (v *Viewer) Update() error {
 	wheelDelta := input.WheelDelta()
 	if wheelDelta != 0 {
 		v.markCompareBorderActivity(now)
+		v.lastCursorActivityAt = now
 		shiftPressed := ebiten.IsKeyPressed(ebiten.KeyShift)
 		controlPressed := ebiten.IsKeyPressed(ebiten.KeyControl)
 		altPressed := ebiten.IsKeyPressed(ebiten.KeyAlt)
@@ -323,7 +332,7 @@ func (v *Viewer) Update() error {
 			} else {
 				v.rotateImage(1)
 			}
-		} else if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
+		} else if imageReady && v.pointInThumbnailStrip(mouseX, mouseY) {
 			if wheelDelta > 0 {
 				_ = v.loadAdjacentImage(-1)
 			} else {
@@ -359,13 +368,13 @@ func (v *Viewer) Update() error {
 		v.applySliderSync(syncRect)
 	}
 
-	v.updateCompareGuideVisibility(now, mouseX, mouseY, imageRect, imageReady)
+	v.updateCompareGuideVisibility(now, imageRect, imageReady)
 
 	v.updateSoloPreview(ebiten.IsKeyPressed(ebiten.Key1), ebiten.IsKeyPressed(ebiten.Key2))
 
-	v.updateCursorShape(mouseX, mouseY, imageRect, imageReady)
+	v.updateCursorShape(now, mouseX, mouseY, imageRect, imageReady)
 	v.updateSlideshow(now)
-	v.updateFramePacing(now, v.shouldStayActive(mouseMoved, leftMousePressed, rightMousePressed))
+	v.updateFramePacing(now, v.shouldStayActive(now, mouseMoved, leftMousePressed, rightMousePressed))
 
 	return nil
 }

@@ -90,6 +90,15 @@ func (v *Viewer) toggleZoom100Fit(mouseX, mouseY float64) {
 		return
 	}
 
+	targetView := v.viewAt100Percent(mouseX, mouseY)
+	v.fitMode = false
+	v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
+	v.targetView = targetView
+	v.ensureSliderPosition()
+	v.showCenterInfo("Zoom %d%%", int(math.Round(targetView.Zoom*100)))
+}
+
+func (v *Viewer) viewAt100Percent(mouseX, mouseY float64) render.View {
 	targetView := v.view
 	targetView.Zoom = 1
 	targetView.Alpha = 1
@@ -111,11 +120,37 @@ func (v *Viewer) toggleZoom100Fit(mouseX, mouseY float64) {
 		targetView.OffsetX = 0
 		targetView.OffsetY = 0
 	}
+	return targetView
+}
+
+func (v *Viewer) toggleFullscreen100Zoom(mouseX, mouseY float64) {
+	if !v.borderlessMaximized || v.imageA == nil {
+		return
+	}
+
+	if v.fullscreenZoomRestoreValid {
+		targetView := v.view
+		targetView.Zoom = v.fullscreenZoomRestore.Zoom
+		targetView.OffsetX = v.fullscreenZoomRestore.OffsetX
+		targetView.OffsetY = v.fullscreenZoomRestore.OffsetY
+		v.fitMode = v.fullscreenZoomRestoreFit
+		v.fullscreenZoomRestoreValid = false
+		v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
+		v.targetView = targetView
+		v.ensureSliderPosition()
+		v.showCenterInfo("Zoom %d%%", int(math.Round(targetView.Zoom*100)))
+		return
+	}
+
+	v.fullscreenZoomRestore = v.targetView
+	v.fullscreenZoomRestoreFit = v.fitMode
+	v.fullscreenZoomRestoreValid = true
+	targetView := v.viewAt100Percent(mouseX, mouseY)
 	v.fitMode = false
 	v.startViewAnimation(v.view, targetView, viewChangeAnimationDuration, 0)
 	v.targetView = targetView
 	v.ensureSliderPosition()
-	v.showCenterInfo("Zoom %d%%", int(math.Round(targetView.Zoom*100)))
+	v.showCenterInfo("Zoom %d%%", 100)
 }
 
 func (v *Viewer) restoreWindow() {
@@ -165,6 +200,7 @@ func (v *Viewer) restoreWindow() {
 	}
 
 	v.borderlessMaximized = false
+	v.fullscreenZoomRestoreValid = false
 	v.enterFromNativeMaximize = false
 	v.leftMouseDown = false
 	v.ignoreMouseUntilRelease = true
@@ -196,6 +232,7 @@ func (v *Viewer) enterBorderlessMaximized() {
 	}
 
 	v.borderlessMaximized = true
+	v.fullscreenZoomRestoreValid = false
 	v.leftMouseDown = false
 	v.ignoreMouseUntilRelease = true
 	v.draggingImage = false

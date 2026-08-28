@@ -16,10 +16,13 @@ QA. The interface stays out of the way until you need it.
 - Fast image opening and fluid folder navigation.
 - Open an image from the command line or drop images and folders into the window.
 - Navigate through every supported image in the current folder.
+- Browse a centered bottom strip of asynchronously loaded, memory-bounded
+  thumbnails; it appears near the bottom edge, hides after mouse inactivity,
+  and lets you click a neighboring thumbnail to open it directly.
 - Smooth cursor-centered zoom, 100% view, fit-to-window and mouse panning.
 - Animated clockwise and counter-clockwise rotation.
 - Animated horizontal and vertical mirroring.
-- Borderless fullscreen with discreet corner and bottom-edge actions.
+- Borderless fullscreen with discreet corner and thumbnail controls.
 - Compare two images with vertical, horizontal or circular masks.
 - Reverse which side or area reveals the comparison image.
 - Image shadow and slider/image synchronization.
@@ -44,8 +47,9 @@ comparison workflow. Dropping multiple images uses the first two supported
 files as images A and B, while dropping a folder opens its first supported
 image.
 
-Use the left and right arrows, or the bottom action bar, to browse neighboring
-images in the same directory.
+Use the left and right arrows, or the thumbnail strip, to browse neighboring
+images in the same directory. The current image stays centered in the strip,
+with previous images on the left and following images on the right.
 
 ## Comparison Mode
 
@@ -73,8 +77,6 @@ window:
 - Top-left corner: rotate counter-clockwise with left click or wheel up.
 - Top-left corner: rotate clockwise with right click or wheel down.
 - Top-right corner: close the viewer.
-- Bottom bar: previous image with left click or wheel up.
-- Bottom bar: next image with right click or wheel down.
 
 These controls are intentionally lightweight so the viewer can stay mostly chrome-free.
 
@@ -90,13 +92,13 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Ctrl + Alt + mouse wheel`: adjust contrast.
 - `Ctrl + mouse wheel` in comparison mode: change the mask opacity.
 - `Ctrl + Shift + mouse wheel` in circular comparison mode: resize the circular mask.
-- `Double click` on the image: toggle fullscreen / restore window.
+- `Double click` on the image: enter fullscreen; while fullscreen, toggle
+  100% / previous zoom and position.
 - `Drag and drop`: load one or two images, or the first image in a folder.
 - `Top-left + left click/wheel up`: rotate 90 degrees counter-clockwise.
 - `Top-left + right click/wheel down`: rotate 90 degrees clockwise.
 - `Top-right + left click`: quit.
-- `Bottom bar + left click/wheel up`: previous image.
-- `Bottom bar + right click/wheel down`: next image.
+- `Thumbnail strip + left click`: open that image directly.
 
 ### Keyboard
 

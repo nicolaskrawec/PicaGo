@@ -1,12 +1,98 @@
 package app
 
 import (
+	"image"
 	"testing"
+	"time"
 
 	"viewergo/internal/compare"
 	imagedata "viewergo/internal/image"
 	"viewergo/internal/render"
 )
+
+func TestCursorBecomesIdleAfterDelay(t *testing.T) {
+	now := time.Now()
+	v := Viewer{}
+	if v.cursorIdle(now) {
+		t.Fatal("cursor with no recorded activity should remain visible")
+	}
+
+	v.lastCursorActivityAt = now
+	if v.cursorIdle(now.Add(cursorIdleDelay - time.Millisecond)) {
+		t.Fatal("cursor became idle before the delay elapsed")
+	}
+	if !v.cursorIdle(now.Add(cursorIdleDelay)) {
+		t.Fatal("cursor did not become idle after the delay elapsed")
+	}
+
+	v.lastCursorActivityAt = now.Add(cursorIdleDelay)
+	if v.cursorIdle(now.Add(cursorIdleDelay)) {
+		t.Fatal("new mouse activity did not wake the cursor")
+	}
+}
+
+func TestFullscreenDoubleClickToggles100AndPreviousZoom(t *testing.T) {
+	previous := render.View{Zoom: 2, OffsetX: 45, OffsetY: -30, Gamma: 1.4, Contrast: 1.2}
+	v := Viewer{
+		imageA:              &imagedata.LoadedImage{Width: 100, Height: 50},
+		borderlessMaximized: true,
+		windowWidth:         1000,
+		windowHeight:        800,
+		view:                previous,
+		targetView:          previous,
+	}
+
+	v.toggleFullscreen100Zoom(500, 400)
+	if !v.fullscreenZoomRestoreValid {
+		t.Fatal("100% zoom did not retain the previous view")
+	}
+	if v.targetView.Zoom != 1 {
+		t.Fatalf("double-click target zoom = %v, want 1", v.targetView.Zoom)
+	}
+
+	v.toggleFullscreen100Zoom(500, 400)
+	if v.fullscreenZoomRestoreValid {
+		t.Fatal("restoring the previous zoom left the toggle active")
+	}
+	if v.targetView.Zoom != previous.Zoom || v.targetView.OffsetX != previous.OffsetX || v.targetView.OffsetY != previous.OffsetY {
+		t.Fatalf("restored target = %+v, want zoom and offsets from %+v", v.targetView, previous)
+	}
+	if v.targetView.Gamma != previous.Gamma || v.targetView.Contrast != previous.Contrast {
+		t.Fatalf("restoring zoom changed image adjustments: %+v", v.targetView)
+	}
+}
+
+func TestSplitGuideFollowsCursorActivityRegardlessOfPosition(t *testing.T) {
+	now := time.Now()
+	v := Viewer{
+		compareMask:         compareMaskSplit,
+		lastCompareBorderAt: now,
+	}
+	imageRect := image.Rect(100, 100, 500, 500)
+
+	if !v.shouldShowSlider(now, imageRect) {
+		t.Fatal("split guide should be visible after mouse activity")
+	}
+	if v.shouldShowSlider(now.Add(cursorIdleDelay), imageRect) {
+		t.Fatal("split guide should be hidden when the cursor becomes idle")
+	}
+}
+
+func TestSplitCommandsWakeGuideWithoutWakingCursor(t *testing.T) {
+	v := Viewer{
+		compareMask:          compareMaskSplit,
+		lastCompareBorderAt:  time.Now().Add(-cursorIdleDelay),
+		lastCursorActivityAt: time.Now().Add(-cursorIdleDelay),
+	}
+
+	v.setCompareOrientation(compare.OrientationHorizontal)
+	if v.splitGuideIdle(time.Now()) {
+		t.Fatal("H/V command did not wake the split guide")
+	}
+	if !v.cursorIdle(time.Now()) {
+		t.Fatal("H/V command should not wake the mouse cursor")
+	}
+}
 
 func TestCircleCompareRotationPreservesImageSelection(t *testing.T) {
 	for _, reversed := range []bool{false, true} {
@@ -177,6 +263,22 @@ func TestImageDropSlotUsesWindowCenter(t *testing.T) {
 		if got := v.imageDropSlot(test.x); got != test.want {
 			t.Errorf("drop at x=%d targets slot %v, want %v", test.x, got, test.want)
 		}
+	}
+}
+
+func TestLoadedImageResetPreservesMousePressLatch(t *testing.T) {
+	v := Viewer{
+		leftMouseDown:       true,
+		draggingImage:       true,
+		draggingSlider:      true,
+		restoreClickPending: true,
+	}
+	v.resetInteractionForLoadedImage()
+	if !v.leftMouseDown {
+		t.Fatal("an asynchronous image load cleared the active mouse press")
+	}
+	if v.draggingImage || v.draggingSlider || v.restoreClickPending {
+		t.Fatalf("loaded-image interaction state was not reset: %+v", v)
 	}
 }
 
