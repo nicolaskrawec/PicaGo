@@ -204,8 +204,9 @@ func (v *Viewer) Update() error {
 			v.leftMouseDown = true
 			return nil
 		}
-		if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
-			_ = v.loadAdjacentImage(-1)
+		// The gaps belong to the thumbnail strip too. Consume the click so it
+		// cannot fall through to the legacy bottom-bar navigation underneath.
+		if v.pointInThumbnailStrip(mouseX, mouseY) {
 			v.leftMouseDown = true
 			return nil
 		}
@@ -266,11 +267,6 @@ func (v *Viewer) Update() error {
 	if rightMousePressed && !v.rightMouseDown {
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			v.rotateImage(1)
-			v.rightMouseDown = true
-			return nil
-		}
-		if imageReady && pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight) {
-			_ = v.loadAdjacentImage(1)
 			v.rightMouseDown = true
 			return nil
 		}
@@ -336,7 +332,7 @@ func (v *Viewer) Update() error {
 			} else {
 				v.rotateImage(1)
 			}
-		} else if imageReady && (v.pointInThumbnailStrip(mouseX, mouseY) || pointInBottomBar(mouseX, mouseY, v.windowWidth, v.windowHeight)) {
+		} else if imageReady && v.pointInThumbnailStrip(mouseX, mouseY) {
 			if wheelDelta > 0 {
 				_ = v.loadAdjacentImage(-1)
 			} else {

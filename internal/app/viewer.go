@@ -77,8 +77,6 @@ const targetTPS = 120
 const compareBorderIdleDelay = 600 * time.Millisecond
 const cursorIdleDelay = 2 * time.Second
 const cornerCommandTolerance = 25
-const bottomCommandHeight = 40
-const bottomCommandCornerWidth = 50
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
 const prefetchedImageCacheLimit = 3
@@ -394,10 +392,8 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	drawCornerHints(
 		screen,
 		v.windowWidth,
-		v.windowHeight,
 		pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance),
 		pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance),
-		false,
 	)
 	v.drawThumbnailStrip(screen)
 
@@ -505,7 +501,7 @@ func drawCenterInfoFrame(dst *ebiten.Image, width, height float32) {
 	vector.FillPath(dst, path, &vector.FillOptions{}, options)
 }
 
-func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTopLeft, showTopRight, showBottomLeft bool) {
+func drawCornerHints(screen *ebiten.Image, windowWidth int, showTopLeft, showTopRight bool) {
 	const size = float32(40)
 	fill := color.NRGBA{48, 48, 48, cornerHintAlpha}
 	options := &vector.DrawPathOptions{AntiAlias: true}
@@ -535,18 +531,6 @@ func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTo
 		ebitenutil.DebugPrintAt(screen, "X", windowWidth-16, 8)
 	}
 
-	if showBottomLeft && windowWidth > 0 && windowHeight > 0 {
-		left := float32(0)
-		top := float32(maxInt(0, windowHeight-bottomCommandHeight))
-		width := float32(windowWidth)
-		height := float32(windowHeight) - top
-		options.ColorScale.Reset()
-		options.ColorScale.ScaleWithColor(fill)
-		vector.FillRect(screen, left, top, width, height, fill, true)
-		indicator := "< >"
-		indicatorWidth := len(indicator) * 6
-		ebitenutil.DebugPrintAt(screen, indicator, windowWidth/2-indicatorWidth/2, int(top)+12)
-	}
 }
 
 func (v *Viewer) Layout(outsideWidth, outsideHeight int) (int, int) {

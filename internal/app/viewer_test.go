@@ -266,6 +266,22 @@ func TestImageDropSlotUsesWindowCenter(t *testing.T) {
 	}
 }
 
+func TestLoadedImageResetPreservesMousePressLatch(t *testing.T) {
+	v := Viewer{
+		leftMouseDown:       true,
+		draggingImage:       true,
+		draggingSlider:      true,
+		restoreClickPending: true,
+	}
+	v.resetInteractionForLoadedImage()
+	if !v.leftMouseDown {
+		t.Fatal("an asynchronous image load cleared the active mouse press")
+	}
+	if v.draggingImage || v.draggingSlider || v.restoreClickPending {
+		t.Fatalf("loaded-image interaction state was not reset: %+v", v)
+	}
+}
+
 func TestAdjustCompareMaskAlphaClamps(t *testing.T) {
 	v := Viewer{compareMaskAlpha: 0.5}
 	v.adjustCompareMaskAlpha(2)

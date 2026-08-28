@@ -2,6 +2,8 @@ package app
 
 import (
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -106,5 +108,51 @@ func TestThumbnailsUseTwoPixelSpacing(t *testing.T) {
 	nextNext := thumbnailRect(1000, 700, 2)
 	if gap := nextNext.Min.X - next.Max.X; gap != 2 {
 		t.Fatalf("neighbor thumbnail gap = %d, want 2", gap)
+	}
+}
+
+func TestThumbnailIsClickableDuringFadeInAndGapsAreReserved(t *testing.T) {
+	dir := t.TempDir()
+	paths := []string{
+		filepath.Join(dir, "a.png"),
+		filepath.Join(dir, "b.png"),
+		filepath.Join(dir, "c.png"),
+	}
+	for _, path := range paths {
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	v := Viewer{
+		imageA:           &imagedata.LoadedImage{FilePath: paths[1]},
+		windowWidth:      1000,
+		windowHeight:     700,
+		thumbnailOpacity: 0.35,
+	}
+	items := v.currentThumbnailItems()
+	if len(items) != 3 {
+		t.Fatalf("visible thumbnails = %d, want 3", len(items))
+	}
+	var current, next thumbnailItem
+	for _, item := range items {
+		if item.current {
+			current = item
+		} else if item.path == paths[2] {
+			next = item
+		}
+	}
+	x, y := (next.rect.Min.X+next.rect.Max.X)/2, (next.rect.Min.Y+next.rect.Max.Y)/2
+	if path, ok := v.thumbnailPathAt(x, y); !ok || path != paths[2] {
+		t.Fatalf("fade-in click selected %q, %v; want %q, true", path, ok, paths[2])
+	}
+	gapX := current.rect.Max.X
+	if !v.pointInThumbnailStrip(gapX, y) {
+		t.Fatal("gap between thumbnails was not reserved by the strip")
+	}
+
+	v.thumbnailOpacity = 0
+	if _, ok := v.thumbnailPathAt(x, y); ok {
+		t.Fatal("fully hidden thumbnail remained clickable")
 	}
 }

@@ -27,16 +27,6 @@ func pointInTopLeftCorner(x, y, tolerance int) bool {
 	return x >= 0 && x < tolerance && y >= 0 && y < tolerance
 }
 
-func pointInBottomBar(x, y, windowWidth, windowHeight int) bool {
-	if windowWidth <= 0 || windowHeight <= 0 {
-		return false
-	}
-	return x >= bottomCommandCornerWidth &&
-		x < windowWidth-bottomCommandCornerWidth &&
-		y >= windowHeight-bottomCommandHeight &&
-		y < windowHeight
-}
-
 func absInt(value int) int {
 	if value < 0 {
 		return -value

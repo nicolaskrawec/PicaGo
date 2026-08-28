@@ -285,7 +285,7 @@ func minFloat64(a, b float64) float64 {
 }
 
 func (v *Viewer) thumbnailPathAt(x, y int) (string, bool) {
-	if v.thumbnailOpacity < 0.5 {
+	if v.thumbnailOpacity <= 0 {
 		return "", false
 	}
 	items := v.currentThumbnailItems()
@@ -304,7 +304,7 @@ func (v *Viewer) thumbnailPathAt(x, y int) (string, bool) {
 }
 
 func (v *Viewer) pointInThumbnailStrip(x, y int) bool {
-	if v.thumbnailOpacity < 0.5 {
+	if v.thumbnailOpacity <= 0 {
 		return false
 	}
 	items := v.currentThumbnailItems()
