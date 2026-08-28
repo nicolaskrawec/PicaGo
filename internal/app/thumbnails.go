@@ -2,21 +2,19 @@ package app
 
 import (
 	stdimage "image"
-	"image/color"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	imagedata "viewergo/internal/image"
 )
 
 const (
-	thumbnailBoxWidth      = 104
-	thumbnailBoxHeight     = 68
-	thumbnailCurrentWidth  = 116
-	thumbnailCurrentHeight = 78
-	thumbnailGap           = 8
+	thumbnailBoxWidth      = 70
+	thumbnailBoxHeight     = 70
+	thumbnailCurrentWidth  = 90
+	thumbnailCurrentHeight = 90
+	thumbnailGap           = 2
 	thumbnailBottomMargin  = 10
 	thumbnailMaxRadius     = 4
 )
@@ -33,13 +31,14 @@ type thumbnailCacheEntry struct {
 }
 
 type thumbnailItem struct {
-	path    string
-	rect    stdimage.Rectangle
-	current bool
+	path     string
+	rect     stdimage.Rectangle
+	current  bool
+	distance int
 }
 
 func thumbnailRadius(windowWidth int) int {
-	available := windowWidth/2 - thumbnailBoxWidth/2 - thumbnailBottomMargin
+	available := windowWidth/2 - thumbnailCurrentWidth/2 - thumbnailBottomMargin
 	if available <= 0 {
 		return 0
 	}
@@ -52,10 +51,18 @@ func thumbnailRadius(windowWidth int) int {
 
 func thumbnailRect(windowWidth, windowHeight, offset int) stdimage.Rectangle {
 	width, height := thumbnailBoxWidth, thumbnailBoxHeight
+	centerX := windowWidth / 2
 	if offset == 0 {
 		width, height = thumbnailCurrentWidth, thumbnailCurrentHeight
+	} else {
+		distance := absInt(offset)
+		centerOffset := thumbnailCurrentWidth/2 + thumbnailGap + thumbnailBoxWidth/2 +
+			(distance-1)*(thumbnailBoxWidth+thumbnailGap)
+		if offset < 0 {
+			centerOffset = -centerOffset
+		}
+		centerX += centerOffset
 	}
-	centerX := windowWidth/2 + offset*(thumbnailBoxWidth+thumbnailGap)
 	bottom := maxInt(0, windowHeight-thumbnailBottomMargin)
 	return stdimage.Rect(centerX-width/2, bottom-height, centerX+(width-width/2), bottom)
 }
@@ -73,6 +80,7 @@ func visibleThumbnailItems(images []string, currentIndex, windowWidth, windowHei
 		}
 		items = append(items, thumbnailItem{
 			path: images[index], rect: thumbnailRect(windowWidth, windowHeight, offset), current: offset == 0,
+			distance: absInt(offset),
 		})
 	}
 	return items
@@ -219,43 +227,33 @@ func (v *Viewer) drawThumbnailStrip(screen *ebiten.Image) {
 	if len(items) == 0 {
 		return
 	}
-	stripRect := items[0].rect
-	for _, item := range items[1:] {
-		stripRect = stripRect.Union(item.rect)
-	}
-	stripRect = stripRect.Inset(-6)
-	drawThumbnailFrame(screen, stripRect, color.NRGBA{20, 20, 20, 155}, color.NRGBA{255, 255, 255, 30}, 8, 1, v.thumbnailOpacity)
 
 	for _, item := range items {
-		frameColor := color.NRGBA{180, 180, 180, 190}
-		frameWidth := float32(1)
+		if !item.current {
+			v.drawThumbnailItem(screen, item)
+		}
+	}
+	for _, item := range items {
 		if item.current {
-			frameColor = color.NRGBA{255, 255, 255, 245}
-			frameWidth = 3
+			v.drawThumbnailItem(screen, item)
+			break
 		}
-		drawThumbnailFrame(screen, item.rect, color.NRGBA{42, 42, 42, 225}, frameColor, 5, frameWidth, v.thumbnailOpacity)
-
-		texture := (*ebiten.Image)(nil)
-		if entry := v.thumbnailCache[item.path]; entry != nil {
-			texture = entry.texture
-		} else if item.current && v.imageA != nil && item.path == v.imageA.FilePath {
-			texture = v.imageA.GPUTexture
-		}
-		drawThumbnailTexture(screen, texture, item.rect.Inset(5), v.thumbnailOpacity)
 	}
 }
 
-func drawThumbnailFrame(screen *ebiten.Image, rect stdimage.Rectangle, fill, stroke color.NRGBA, radius, strokeWidth float32, opacity float64) {
-	path := roundedRectPath(float32(rect.Min.X), float32(rect.Min.Y), float32(rect.Dx()), float32(rect.Dy()), radius)
-	fillOptions := &vector.DrawPathOptions{AntiAlias: true}
-	fillOptions.ColorScale.ScaleWithColor(withOpacity(fill, opacity))
-	vector.FillPath(screen, path, &vector.FillOptions{}, fillOptions)
-	if strokeWidth <= 0 {
-		return
+func (v *Viewer) drawThumbnailItem(screen *ebiten.Image, item thumbnailItem) {
+	itemOpacity := thumbnailItemOpacity(item.distance) * v.thumbnailOpacity
+	texture := (*ebiten.Image)(nil)
+	if entry := v.thumbnailCache[item.path]; entry != nil {
+		texture = entry.texture
+	} else if item.current && v.imageA != nil && item.path == v.imageA.FilePath {
+		texture = v.imageA.GPUTexture
 	}
-	strokeOptions := &vector.DrawPathOptions{AntiAlias: true}
-	strokeOptions.ColorScale.ScaleWithColor(withOpacity(stroke, opacity))
-	vector.StrokePath(screen, path, &vector.StrokeOptions{Width: strokeWidth}, strokeOptions)
+	drawThumbnailTexture(screen, texture, item.rect, itemOpacity)
+}
+
+func thumbnailItemOpacity(distance int) float64 {
+	return clampFloat64(0.8-float64(distance)*0.1, 0, 0.8)
 }
 
 func drawThumbnailTexture(screen, texture *ebiten.Image, bounds stdimage.Rectangle, opacity float64) {
@@ -279,11 +277,6 @@ func drawThumbnailTexture(screen, texture *ebiten.Image, bounds stdimage.Rectang
 	screen.DrawImage(texture, options)
 }
 
-func withOpacity(value color.NRGBA, opacity float64) color.NRGBA {
-	value.A = uint8(float64(value.A) * clampFloat64(opacity, 0, 1))
-	return value
-}
-
 func minFloat64(a, b float64) float64 {
 	if a < b {
 		return a
@@ -295,7 +288,14 @@ func (v *Viewer) thumbnailPathAt(x, y int) (string, bool) {
 	if v.thumbnailOpacity < 0.5 {
 		return "", false
 	}
-	for _, item := range v.currentThumbnailItems() {
+	items := v.currentThumbnailItems()
+	for _, item := range items {
+		if item.current && pointInRect(x, y, item.rect) {
+			return item.path, true
+		}
+	}
+	for index := len(items) - 1; index >= 0; index-- {
+		item := items[index]
 		if pointInRect(x, y, item.rect) {
 			return item.path, true
 		}

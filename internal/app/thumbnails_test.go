@@ -1,6 +1,7 @@
 package app
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -84,5 +85,26 @@ func TestThumbnailVisibilityFadesInAndOut(t *testing.T) {
 	v.updateThumbnailVisibility(now, 500, 500)
 	if v.thumbnailOpacity >= visibleOpacity {
 		t.Fatal("thumbnail fade-out did not start after leaving bottom edge")
+	}
+}
+
+func TestThumbnailOpacityDecreasesWithDistance(t *testing.T) {
+	wants := []float64{0.8, 0.7, 0.6, 0.5, 0.4}
+	for distance, want := range wants {
+		if got := thumbnailItemOpacity(distance); math.Abs(got-want) > 0.0001 {
+			t.Errorf("distance %d opacity = %v, want %v", distance, got, want)
+		}
+	}
+}
+
+func TestThumbnailsUseTwoPixelSpacing(t *testing.T) {
+	current := thumbnailRect(1000, 700, 0)
+	next := thumbnailRect(1000, 700, 1)
+	if gap := next.Min.X - current.Max.X; gap != 2 {
+		t.Fatalf("current thumbnail gap = %d, want 2", gap)
+	}
+	nextNext := thumbnailRect(1000, 700, 2)
+	if gap := nextNext.Min.X - next.Max.X; gap != 2 {
+		t.Fatalf("neighbor thumbnail gap = %d, want 2", gap)
 	}
 }
