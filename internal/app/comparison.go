@@ -275,6 +275,10 @@ func (v *Viewer) updateCursorShape(now time.Time, mouseX, mouseY int, imageRect 
 	}
 
 	ebiten.SetCursorMode(ebiten.CursorModeVisible)
+	if v.draggingImage {
+		ebiten.SetCursorShape(ebiten.CursorShapeMove)
+		return
+	}
 	if v.compareMask == compareMaskCircle {
 		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
 		return
