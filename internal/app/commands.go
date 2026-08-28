@@ -223,7 +223,7 @@ func (v *Viewer) Update() error {
 				absInt(mouseX-v.lastImageClickX) <= 4 &&
 				absInt(mouseY-v.lastImageClickY) <= 4 {
 				if v.borderlessMaximized {
-					v.restoreWindow()
+					v.toggleFullscreen100Zoom(float64(mouseX), float64(mouseY))
 				} else {
 					v.pendingEnterFullscreen = true
 				}

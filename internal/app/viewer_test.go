@@ -31,6 +31,37 @@ func TestCursorBecomesIdleAfterDelay(t *testing.T) {
 	}
 }
 
+func TestFullscreenDoubleClickToggles100AndPreviousZoom(t *testing.T) {
+	previous := render.View{Zoom: 2, OffsetX: 45, OffsetY: -30, Gamma: 1.4, Contrast: 1.2}
+	v := Viewer{
+		imageA:              &imagedata.LoadedImage{Width: 100, Height: 50},
+		borderlessMaximized: true,
+		windowWidth:         1000,
+		windowHeight:        800,
+		view:                previous,
+		targetView:          previous,
+	}
+
+	v.toggleFullscreen100Zoom(500, 400)
+	if !v.fullscreenZoomRestoreValid {
+		t.Fatal("100% zoom did not retain the previous view")
+	}
+	if v.targetView.Zoom != 1 {
+		t.Fatalf("double-click target zoom = %v, want 1", v.targetView.Zoom)
+	}
+
+	v.toggleFullscreen100Zoom(500, 400)
+	if v.fullscreenZoomRestoreValid {
+		t.Fatal("restoring the previous zoom left the toggle active")
+	}
+	if v.targetView.Zoom != previous.Zoom || v.targetView.OffsetX != previous.OffsetX || v.targetView.OffsetY != previous.OffsetY {
+		t.Fatalf("restored target = %+v, want zoom and offsets from %+v", v.targetView, previous)
+	}
+	if v.targetView.Gamma != previous.Gamma || v.targetView.Contrast != previous.Contrast {
+		t.Fatalf("restoring zoom changed image adjustments: %+v", v.targetView)
+	}
+}
+
 func TestSplitGuideFollowsCursorActivityRegardlessOfPosition(t *testing.T) {
 	now := time.Now()
 	v := Viewer{

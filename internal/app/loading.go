@@ -191,6 +191,7 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 		oldLoaded = v.imageA
 		oldDecoded = v.decodedA
 		v.imageA = loaded
+		v.fullscreenZoomRestoreValid = false
 		v.decodedA = decoded
 		if v.imageB == nil {
 			v.mode = displayModeSingleA

@@ -90,7 +90,8 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Ctrl + Alt + mouse wheel`: adjust contrast.
 - `Ctrl + mouse wheel` in comparison mode: change the mask opacity.
 - `Ctrl + Shift + mouse wheel` in circular comparison mode: resize the circular mask.
-- `Double click` on the image: toggle fullscreen / restore window.
+- `Double click` on the image: enter fullscreen; while fullscreen, toggle
+  100% / previous zoom and position.
 - `Drag and drop`: load one or two images, or the first image in a folder.
 - `Top-left + left click/wheel up`: rotate 90 degrees counter-clockwise.
 - `Top-left + right click/wheel down`: rotate 90 degrees clockwise.
