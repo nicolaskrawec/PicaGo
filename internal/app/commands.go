@@ -114,12 +114,7 @@ func (v *Viewer) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyP) {
 		v.toggleSlideshow(now)
 	}
-	if !ebiten.IsKeyPressed(ebiten.KeyShift) && !ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
-		_ = v.loadAdjacentImage(-1)
-	}
-	if !ebiten.IsKeyPressed(ebiten.KeyShift) && !ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
-		_ = v.loadAdjacentImage(1)
-	}
+	v.updateNavigationKeyRepeat(now)
 	if ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
 		v.rotateImage(-1)
 	}
@@ -349,18 +344,16 @@ func (v *Viewer) Update() error {
 			v.zoomAt(float64(mouseX), float64(mouseY), math.Pow(1.15, wheelDelta))
 		}
 	}
+	v.updateZoomKeyRepeat(now)
+
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
 		if ebiten.IsKeyPressed(ebiten.KeyShift) {
 			v.toggleScreenMirror(false)
-		} else {
-			v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1.15)
 		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
 		if ebiten.IsKeyPressed(ebiten.KeyShift) {
 			v.toggleScreenMirror(false)
-		} else {
-			v.zoomAt(float64(v.windowWidth)/2, float64(v.windowHeight)/2, 1/1.15)
 		}
 	}
 
@@ -378,6 +371,94 @@ func (v *Viewer) Update() error {
 	v.updateFramePacing(now, v.shouldStayActive(now, mouseMoved, leftMousePressed, rightMousePressed))
 
 	return nil
+}
+
+// updateNavigationKeyRepeat handles the OS-independent repeat behaviour for
+// the left/right navigation keys. Ebiten's IsKeyPressed reports the physical
+// state, so this also works when the platform's key-repeat settings differ.
+func (v *Viewer) updateNavigationKeyRepeat(now time.Time) {
+	leftPressed := ebiten.IsKeyPressed(ebiten.KeyArrowLeft)
+	rightPressed := ebiten.IsKeyPressed(ebiten.KeyArrowRight)
+	plainNavigation := !ebiten.IsKeyPressed(ebiten.KeyShift) && !ebiten.IsKeyPressed(ebiten.KeyControl)
+
+	direction := 0
+	if plainNavigation {
+		switch {
+		case leftPressed && !rightPressed:
+			direction = -1
+		case rightPressed && !leftPressed:
+			direction = 1
+		}
+	}
+
+	if direction == 0 {
+		v.navigationKeyDirection = 0
+		v.navigationKeyRepeatAt = time.Time{}
+		return
+	}
+
+	if direction != v.navigationKeyDirection {
+		v.navigationKeyDirection = direction
+		v.navigationKeyRepeatAt = now.Add(navigationKeyRepeatDelay)
+		_ = v.loadAdjacentImage(direction)
+		return
+	}
+
+	if now.Before(v.navigationKeyRepeatAt) {
+		return
+	}
+
+	// Do not issue another request while the previous preview is still being
+	// decoded. The next repeat is scheduled from the current frame so a slow
+	// decode cannot cause a burst of stale requests.
+	if v.pendingImageLoadAID != 0 {
+		v.navigationKeyRepeatAt = now.Add(navigationKeyRepeatInterval)
+		return
+	}
+
+	_ = v.loadAdjacentImage(direction)
+	v.navigationKeyRepeatAt = now.Add(navigationKeyRepeatInterval)
+}
+
+func (v *Viewer) updateZoomKeyRepeat(now time.Time) {
+	upPressed := ebiten.IsKeyPressed(ebiten.KeyArrowUp)
+	downPressed := ebiten.IsKeyPressed(ebiten.KeyArrowDown)
+	direction := 0
+	if !ebiten.IsKeyPressed(ebiten.KeyShift) {
+		switch {
+		case upPressed && !downPressed:
+			direction = 1
+		case downPressed && !upPressed:
+			direction = -1
+		}
+	}
+
+	if direction == 0 {
+		v.zoomKeyDirection = 0
+		v.zoomKeyRepeatAt = time.Time{}
+		v.zoomKeyStopAt100 = false
+		return
+	}
+
+	if direction != v.zoomKeyDirection {
+		v.zoomKeyDirection = direction
+		v.zoomKeyRepeatAt = now.Add(zoomKeyRepeatDelay)
+		v.zoomKeyStopAt100 = (direction > 0 && v.targetView.Zoom < 1) || (direction < 0 && v.targetView.Zoom > 1)
+		v.zoomAtKeyboard(direction)
+		return
+	}
+
+	if now.Before(v.zoomKeyRepeatAt) {
+		return
+	}
+
+	if v.zoomKeyStopAt100 && v.targetView.Zoom == 1 {
+		v.zoomKeyRepeatAt = now.Add(zoomKeyRepeatInterval)
+		return
+	}
+
+	v.zoomAtKeyboard(direction)
+	v.zoomKeyRepeatAt = now.Add(zoomKeyRepeatInterval)
 }
 
 // imageDropSlot divides the window vertically through its center. Until A is

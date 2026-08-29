@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	imagedata "viewergo/internal/image"
 )
 
 func pointInRect(x, y int, rect stdimage.Rectangle) bool {
@@ -95,11 +97,11 @@ func (v *Viewer) helpTextCompact() string {
 func (v *Viewer) helpTextCategorized(debug bool) string {
 	fileA := "A"
 	if v.imageA != nil && v.imageA.FileName != "" {
-		fileA = v.imageA.FileName
+		fileA = imageInfoLabel(v.imageA)
 	}
 	fileB := "none"
 	if v.imageB != nil && v.imageB.FileName != "" {
-		fileB = v.imageB.FileName
+		fileB = imageInfoLabel(v.imageB)
 	}
 	syncMode := "off"
 	if v.syncSliderWithImage {
@@ -155,6 +157,17 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 		"2: "+fileB,
 	)
 	return strings.Join(lines, "\n")
+}
+
+func imageInfoLabel(image *imagedata.LoadedImage) string {
+	if image == nil {
+		return ""
+	}
+	label := image.FileName
+	if image.DecodeMethod != "" {
+		label += " [" + image.DecodeMethod + "]"
+	}
+	return label
 }
 
 func (v *Viewer) memoryStatusText() string {

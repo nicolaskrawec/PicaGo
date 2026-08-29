@@ -24,6 +24,7 @@ import (
 type LoadedImage struct {
 	FileName        string
 	FilePath        string
+	DecodeMethod    string
 	Width           int
 	Height          int
 	HasTransparency bool
@@ -33,6 +34,7 @@ type LoadedImage struct {
 type DecodedImage struct {
 	FileName        string
 	FilePath        string
+	DecodeMethod    string
 	Width           int
 	Height          int
 	HasTransparency bool
@@ -154,10 +156,11 @@ func decodeFromReader(reader io.Reader, fileName, filePath string, maxDimension 
 
 	bounds := decoded.Bounds()
 	result := &DecodedImage{
-		FileName: fileName,
-		FilePath: filePath,
-		Width:    bounds.Dx(),
-		Height:   bounds.Dy(),
+		FileName:     fileName,
+		FilePath:     filePath,
+		DecodeMethod: "image.Decode",
+		Width:        bounds.Dx(),
+		Height:       bounds.Dy(),
 		// Alpha detection requires a full pixel-by-pixel pass. Keep it disabled
 		// so decoding large images does not trigger a second full image scan.
 		HasTransparency: false,
@@ -183,19 +186,23 @@ func decodeJPEG(reader io.Reader, fileName, filePath string, maxDimension int) (
 	// the source once and obtain dimensions from the resulting image.
 	if maxDimension <= 0 {
 		decoded, err := jpegn.Decode(reader)
+		decodeMethod := "jpegn"
 		if err != nil {
 			// Retry only when the source can be rewound; this preserves the
 			// compatibility fallback without buffering the compressed file.
 			if seeker, ok := reader.(io.Seeker); ok {
 				if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr == nil {
 					decoded, err = stdjpeg.Decode(reader)
+					decodeMethod = "image/jpeg"
 				}
 			}
 			if err != nil {
 				return nil, err
 			}
 		}
-		return decodedImageResult(decoded, fileName, filePath), nil
+		result := decodedImageResult(decoded, fileName, filePath)
+		result.DecodeMethod = decodeMethod
+		return result, nil
 	}
 
 	data, err := io.ReadAll(reader)
@@ -217,10 +224,12 @@ func decodeJPEG(reader io.Reader, fileName, filePath string, maxDimension int) (
 	}
 
 	decoded, err := jpegn.Decode(bytes.NewReader(data), decodeOptions)
+	decodeMethod := "jpegn"
 	if err != nil {
 		// Keep compatibility with the standard library for uncommon JPEG
 		// variants rejected by jpegn (for example arithmetic-coded files).
 		decoded, err = stdjpeg.Decode(bytes.NewReader(data))
+		decodeMethod = "image/jpeg"
 		if err != nil {
 			return nil, err
 		}
@@ -228,7 +237,8 @@ func decodeJPEG(reader io.Reader, fileName, filePath string, maxDimension int) (
 
 	result := &DecodedImage{
 		FileName: fileName, FilePath: filePath,
-		Width: config.Width, Height: config.Height,
+		DecodeMethod: decodeMethod,
+		Width:        config.Width, Height: config.Height,
 		HasTransparency: false, Image: decoded,
 	}
 	result.Preview = makePreview(decoded, maxDimension)
@@ -294,6 +304,7 @@ func NewLoadedImage(decoded *DecodedImage) *LoadedImage {
 	return &LoadedImage{
 		FileName:        decoded.FileName,
 		FilePath:        decoded.FilePath,
+		DecodeMethod:    decoded.DecodeMethod,
 		Width:           decoded.Width,
 		Height:          decoded.Height,
 		HasTransparency: decoded.HasTransparency,
@@ -311,7 +322,8 @@ func NewLoadedPreviewImage(decoded *DecodedImage) *LoadedImage {
 	}
 	return &LoadedImage{
 		FileName: decoded.FileName, FilePath: decoded.FilePath,
-		Width: decoded.Width, Height: decoded.Height,
+		DecodeMethod: decoded.DecodeMethod,
+		Width:        decoded.Width, Height: decoded.Height,
 		HasTransparency: decoded.HasTransparency,
 		GPUTexture:      ebiten.NewImageFromImage(textureSource),
 	}
@@ -368,6 +380,7 @@ func NewLoadedPreviewCopy(source *LoadedImage, maxDimension int) *LoadedImage {
 	return &LoadedImage{
 		FileName:        source.FileName,
 		FilePath:        source.FilePath,
+		DecodeMethod:    source.DecodeMethod,
 		Width:           source.Width,
 		Height:          source.Height,
 		HasTransparency: source.HasTransparency,

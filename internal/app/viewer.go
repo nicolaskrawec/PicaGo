@@ -96,6 +96,11 @@ const thumbnailCacheLimit = 64
 const thumbnailWorkerLimit = 2
 const thumbnailRevealDistance = 120
 const thumbnailLoadFadeDuration = 220 * time.Millisecond
+const navigationKeyRepeatDelay = 350 * time.Millisecond
+const navigationKeyRepeatInterval = 100 * time.Millisecond
+const zoomKeyRepeatDelay = 180 * time.Millisecond
+const zoomKeyRepeatInterval = 75 * time.Millisecond
+const zoomKeyStepFactor = 1.10
 
 var Version = "dev"
 
@@ -130,6 +135,11 @@ type Viewer struct {
 	ignoreMouseUntilRelease bool
 	lastMouseX              int
 	lastMouseY              int
+	navigationKeyDirection  int
+	navigationKeyRepeatAt   time.Time
+	zoomKeyDirection        int
+	zoomKeyRepeatAt         time.Time
+	zoomKeyStopAt100        bool
 
 	windowWidth           int
 	windowHeight          int

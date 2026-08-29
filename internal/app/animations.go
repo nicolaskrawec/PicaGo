@@ -119,6 +119,22 @@ func (v *Viewer) startRotationAnimation(quarterTurns int) {
 }
 
 func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
+	v.zoomAtWithOptions(mouseX, mouseY, factor, false)
+}
+
+func (v *Viewer) zoomAtKeyboard(direction int) {
+	if direction == 0 {
+		return
+	}
+
+	factor := 1 / zoomKeyStepFactor
+	if direction > 0 {
+		factor = zoomKeyStepFactor
+	}
+	v.zoomAtWithOptions(float64(v.windowWidth)/2, float64(v.windowHeight)/2, factor, true)
+}
+
+func (v *Viewer) zoomAtWithOptions(mouseX, mouseY, factor float64, snapTo100 bool) {
 	base := v.imageA
 	if base == nil {
 		return
@@ -130,6 +146,9 @@ func (v *Viewer) zoomAt(mouseX, mouseY, factor float64) {
 	newZoom := math.Max(oldZoom*factor, 0.05)
 	if newZoom > 32 {
 		newZoom = 32
+	}
+	if snapTo100 && ((oldZoom < 1 && newZoom >= 1) || (oldZoom > 1 && newZoom <= 1)) {
+		newZoom = 1
 	}
 
 	centerX := float64(v.windowWidth) / 2
