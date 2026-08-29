@@ -19,6 +19,7 @@ func (v *Viewer) Update() error {
 	v.rememberCurrentImageView()
 	v.collectAsyncImageLoads()
 	v.promotePendingHighResImages()
+	v.collectHighResolutionImages()
 	v.collectPrefetchedImages()
 	v.collectThumbnails()
 	v.ensureVisibleThumbnails()

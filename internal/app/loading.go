@@ -25,9 +25,12 @@ func (v *Viewer) startAsyncImageFileLoad(path string, slot asyncImageSlot, reset
 	v.loadingImageName = filepath.Base(path)
 	v.loadError = ""
 	ebiten.SetWindowTitle(windowTitle(v.loadingImageName + " loading..."))
+	maxDimension := v.previewDimension()
 
 	go func() {
-		decoded, err := imagedata.DecodeFileForDisplay(path, v.previewDimension())
+		v.decodeSlots <- struct{}{}
+		decoded, err := imagedata.DecodeFileForDisplay(path, maxDimension)
+		<-v.decodeSlots
 		v.imageLoadResults <- asyncImageResult{
 			id:          id,
 			slot:        slot,
@@ -36,7 +39,11 @@ func (v *Viewer) startAsyncImageFileLoad(path string, slot asyncImageSlot, reset
 			resetView:   resetView,
 			animateFit:  animateFit,
 			activateFit: true,
+			loadFull: func() (*imagedata.DecodedImage, error) {
+				return imagedata.DecodeFile(path)
+			},
 		}
+		ebiten.ScheduleFrame()
 	}()
 }
 
@@ -48,9 +55,12 @@ func (v *Viewer) startAsyncImageFSLoad(fsys fs.FS, path string, slot asyncImageS
 	v.loadingImageName = filepath.Base(path)
 	v.loadError = ""
 	ebiten.SetWindowTitle(windowTitle(v.loadingImageName + " loading..."))
+	maxDimension := v.previewDimension()
 
 	go func() {
-		decoded, err := imagedata.DecodeFSForDisplay(fsys, path, v.previewDimension())
+		v.decodeSlots <- struct{}{}
+		decoded, err := imagedata.DecodeFSForDisplay(fsys, path, maxDimension)
+		<-v.decodeSlots
 		v.imageLoadResults <- asyncImageResult{
 			id:          id,
 			slot:        slot,
@@ -59,7 +69,11 @@ func (v *Viewer) startAsyncImageFSLoad(fsys fs.FS, path string, slot asyncImageS
 			resetView:   resetView,
 			animateFit:  animateFit,
 			activateFit: true,
+			loadFull: func() (*imagedata.DecodedImage, error) {
+				return imagedata.DecodeFS(fsys, path)
+			},
 		}
+		ebiten.ScheduleFrame()
 	}()
 }
 
@@ -89,23 +103,52 @@ func (v *Viewer) promotePendingHighResImages() {
 		if pending == nil || now.Before(pending.readyAt) {
 			continue
 		}
-		// Keep the initial full-resolution upload out of the animated fit
-		// period. The preview is sufficient while the image zooms in.
-		if pending.slot == asyncImageSlotA && v.initialPrefetchPending && (v.pendingResetFit || v.viewAnimationActive || v.openingAnimationActive) {
+		// Keep the full-resolution decode out of the animated fit period. The
+		// screen-sized preview is sufficient while the image zooms in.
+		if pending.slot == asyncImageSlotA && v.prefetchAfterHighRes == pending.loaded && (v.pendingResetFit || v.viewAnimationActive || v.openingAnimationActive) {
 			continue
 		}
 		current := v.imageA
 		if pending.slot == asyncImageSlotB {
 			current = v.imageB
 		}
-		if current == pending.loaded {
-			imagedata.UpgradeLoadedImage(pending.loaded, pending.decoded)
-		}
-		if pending.slot == asyncImageSlotA && v.initialPrefetchPending {
-			v.initialPrefetchPending = false
-			v.prefetchAdjacentImages()
-		}
 		v.pendingHighRes[i] = nil
+		if current != pending.loaded || pending.loadFull == nil {
+			continue
+		}
+		go func(pending *pendingHighResImage) {
+			v.decodeSlots <- struct{}{}
+			decoded, err := pending.loadFull()
+			<-v.decodeSlots
+			v.highResResults <- highResImageResult{
+				slot: pending.slot, loaded: pending.loaded, decoded: decoded, err: err,
+			}
+			ebiten.ScheduleFrame()
+		}(pending)
+	}
+}
+
+func (v *Viewer) collectHighResolutionImages() {
+	for {
+		select {
+		case result := <-v.highResResults:
+			current := v.imageA
+			if result.slot == asyncImageSlotB {
+				current = v.imageB
+			}
+			if result.err == nil && result.decoded != nil && current == result.loaded {
+				imagedata.UpgradeLoadedImage(result.loaded, result.decoded)
+			}
+			// Uploading copies pixels to the GPU. Never retain the full CPU
+			// decode after this point, including stale and failed requests.
+			result.decoded.Release()
+			if result.slot == asyncImageSlotA && current == result.loaded && v.prefetchAfterHighRes == result.loaded {
+				v.prefetchAfterHighRes = nil
+				v.prefetchAdjacentImages()
+			}
+		default:
+			return
+		}
 	}
 }
 
@@ -126,7 +169,9 @@ func (v *Viewer) collectPrefetchedImages() {
 		case result := <-v.prefetchResults:
 			delete(v.prefetchInFlight, result.path)
 			if result.err == nil && result.decoded != nil {
-				v.cachePrefetchedImage(result.path, result.decoded)
+				loaded := imagedata.NewLoadedPreviewImage(result.decoded)
+				result.decoded.Release()
+				v.cachePrefetchedImage(result.path, loaded)
 			} else {
 				result.decoded.Release()
 			}
@@ -151,10 +196,10 @@ func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 		return
 	}
 
-	v.applyDecodedImage(result.slot, result.decoded, result.resetView, result.animateFit, result.activateFit)
+	v.applyDecodedImage(result.slot, result.decoded, result.resetView, result.animateFit, result.activateFit, result.loadFull)
 }
 
-func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.DecodedImage, resetView, animateFit, activateFit bool) {
+func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.DecodedImage, resetView, animateFit, activateFit bool, loadFull imageDecodeFunc) {
 	loaded := imagedata.NewLoadedPreviewImage(decoded)
 	if loaded == nil {
 		decoded.Release()
@@ -162,18 +207,21 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 		ebiten.SetWindowTitle(windowTitle("load failed"))
 		return
 	}
+	decoded.Release()
+	v.applyLoadedImage(slot, loaded, resetView, animateFit, activateFit, loadFull)
+}
+
+func (v *Viewer) applyLoadedImage(slot asyncImageSlot, loaded *imagedata.LoadedImage, resetView, animateFit, activateFit bool, loadFull imageDecodeFunc) {
 
 	v.loadError = ""
 	v.pendingHighRes[slot] = nil
-	v.initialPrefetchPending = false
 	v.rememberCurrentImageView()
 	// Persist the previous image's state when a new image is applied. Changes
 	// made while viewing the current image remain in memory until this point
 	// or until the application closes.
 	_ = saveImageViewStates(v.imageViewStates)
-	savedView, hasSavedView := v.imageViewStates[imageViewStateKey(decoded.FilePath)]
+	savedView, hasSavedView := v.imageViewStates[imageViewStateKey(loaded.FilePath)]
 	var oldLoaded *imagedata.LoadedImage
-	var oldDecoded *imagedata.DecodedImage
 	if resetView {
 		if hasSavedView {
 			v.stopViewAnimation(true)
@@ -189,10 +237,8 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 	switch slot {
 	case asyncImageSlotA:
 		oldLoaded = v.imageA
-		oldDecoded = v.decodedA
 		v.imageA = loaded
 		v.fullscreenZoomRestoreValid = false
-		v.decodedA = decoded
 		if v.imageB == nil {
 			v.mode = displayModeSingleA
 		}
@@ -205,35 +251,36 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 		}
 	case asyncImageSlotB:
 		oldLoaded = v.imageB
-		oldDecoded = v.decodedB
 		v.imageB = loaded
-		v.decodedB = decoded
 		if v.imageA != nil {
 			v.mode = displayModeCompare
 		}
 	}
+	if slot == asyncImageSlotA && oldLoaded != nil {
+		// Keep the previous image instantly navigable, but only as a
+		// screen-sized GPU texture. The old full texture is released below.
+		preview := imagedata.NewLoadedPreviewCopy(oldLoaded, v.previewDimension())
+		v.cachePrefetchedImage(oldLoaded.FilePath, preview)
+	}
 	oldLoaded.Release()
-	if slot == asyncImageSlotA && oldDecoded != nil && oldLoaded != nil {
-		// The image that was displayed becomes the new -1 entry.
-		v.cachePrefetchedImage(oldLoaded.FilePath, oldDecoded)
-	} else if oldDecoded != nil {
-		oldDecoded.Release()
-	}
-	if fullResolutionUploadEnabled {
-		// Give the preview a few frames to reach the screen before starting the
-		// potentially expensive full-resolution GPU upload.
+	needsHighResolution := loadFull != nil && !loaded.IsFullResolution()
+	if needsHighResolution {
+		// Delay the decode itself rather than retaining full CPU pixels during
+		// the preview animation.
 		v.pendingHighRes[slot] = &pendingHighResImage{
-			slot: slot, loaded: loaded, decoded: decoded, readyAt: time.Now().Add(250 * time.Millisecond),
+			slot: slot, loaded: loaded, loadFull: loadFull, readyAt: time.Now().Add(250 * time.Millisecond),
 		}
-	}
-	if slot == asyncImageSlotA && animateFit {
-		v.initialPrefetchPending = true
 	}
 
 	v.resetInteractionForLoadedImage()
 	ebiten.SetWindowTitle(windowTitle(loaded.FileName))
-	if !(slot == asyncImageSlotA && animateFit) {
-		v.prefetchAdjacentImages()
+	if slot == asyncImageSlotA {
+		if needsHighResolution {
+			v.prefetchAfterHighRes = loaded
+		} else {
+			v.prefetchAfterHighRes = nil
+			v.prefetchAdjacentImages()
+		}
 	}
 }
 

@@ -134,6 +134,7 @@ func (v *Viewer) ensureVisibleThumbnails() {
 	if len(paths) == 0 {
 		return
 	}
+	v.pruneThumbnailCache(paths)
 
 	// The active thumbnail is a hard priority: do not start its neighbors
 	// until it has completed (or failed). This keeps a slow portrait/landscape
@@ -166,13 +167,36 @@ func (v *Viewer) ensureVisibleThumbnails() {
 	}
 }
 
+func (v *Viewer) pruneThumbnailCache(paths []string) {
+	wanted := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		wanted[path] = struct{}{}
+	}
+	for path, entry := range v.thumbnailCache {
+		if _, ok := wanted[path]; ok {
+			continue
+		}
+		if entry != nil && entry.texture != nil {
+			entry.texture.Deallocate()
+		}
+		delete(v.thumbnailCache, path)
+	}
+	for path := range v.thumbnailFailed {
+		if _, ok := wanted[path]; !ok {
+			delete(v.thumbnailFailed, path)
+		}
+	}
+}
+
 func (v *Viewer) startThumbnailLoad(path string) {
 	if path == "" || v.thumbnailInFlight[path] || len(v.thumbnailInFlight) >= thumbnailWorkerLimit {
 		return
 	}
 	v.thumbnailInFlight[path] = true
 	go func() {
+		v.decodeSlots <- struct{}{}
 		thumbnail, err := imagedata.DecodeFileThumbnail(path, thumbnailMaxDimension)
+		<-v.decodeSlots
 		v.thumbnailResults <- thumbnailResult{path: path, image: thumbnail, err: err}
 		ebiten.ScheduleFrame()
 	}()

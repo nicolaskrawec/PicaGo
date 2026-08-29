@@ -57,6 +57,7 @@ type asyncImageResult struct {
 	resetView   bool
 	animateFit  bool
 	activateFit bool
+	loadFull    imageDecodeFunc
 }
 
 type prefetchedImageResult struct {
@@ -66,10 +67,19 @@ type prefetchedImageResult struct {
 }
 
 type pendingHighResImage struct {
+	slot     asyncImageSlot
+	loaded   *imagedata.LoadedImage
+	loadFull imageDecodeFunc
+	readyAt  time.Time
+}
+
+type imageDecodeFunc func() (*imagedata.DecodedImage, error)
+
+type highResImageResult struct {
 	slot    asyncImageSlot
 	loaded  *imagedata.LoadedImage
 	decoded *imagedata.DecodedImage
-	readyAt time.Time
+	err     error
 }
 
 const idleFrameDelay = 500 * time.Millisecond
@@ -87,10 +97,6 @@ const thumbnailWorkerLimit = 2
 const thumbnailRevealDistance = 120
 const thumbnailLoadFadeDuration = 220 * time.Millisecond
 
-// Temporary diagnostic switch: keep the screen-sized texture only so we can
-// verify whether full-resolution GPU uploads cause navigation stalls.
-const fullResolutionUploadEnabled = true
-
 var Version = "dev"
 
 func windowTitle(imageName string) string {
@@ -102,10 +108,8 @@ func windowTitle(imageName string) string {
 }
 
 type Viewer struct {
-	imageA   *imagedata.LoadedImage
-	imageB   *imagedata.LoadedImage
-	decodedA *imagedata.DecodedImage
-	decodedB *imagedata.DecodedImage
+	imageA *imagedata.LoadedImage
+	imageB *imagedata.LoadedImage
 
 	mode displayMode
 	// The 1/2 keys temporarily override mode while held. Keep the previous mode
@@ -204,10 +208,11 @@ type Viewer struct {
 	pendingImageLoadAID        int
 	pendingImageLoadBID        int
 	imageLoadResults           chan asyncImageResult
+	highResResults             chan highResImageResult
 	prefetchResults            chan prefetchedImageResult
 	prefetchInFlight           map[string]bool
-	prefetchSlots              chan struct{}
-	prefetchedImages           map[string]*imagedata.DecodedImage
+	decodeSlots                chan struct{}
+	prefetchedImages           map[string]*imagedata.LoadedImage
 	prefetchOrder              []string
 	thumbnailResults           chan thumbnailResult
 	thumbnailInFlight          map[string]bool
@@ -218,7 +223,7 @@ type Viewer struct {
 	thumbnailOpacity           float64
 	hoveredThumbnailPath       string
 	pendingHighRes             [2]*pendingHighResImage
-	initialPrefetchPending     bool
+	prefetchAfterHighRes       *imagedata.LoadedImage
 	navigationDirectory        string
 	navigationImages           []string
 	imageViewStates            map[string]render.View
@@ -259,15 +264,22 @@ func Run(args []string) error {
 		syncSliderWithImage: true,
 		animateInitialFit:   cfg.AnimateOnStart,
 		imageLoadResults:    make(chan asyncImageResult, 4),
+		highResResults:      make(chan highResImageResult, 2),
 		prefetchResults:     make(chan prefetchedImageResult, 4),
 		prefetchInFlight:    make(map[string]bool),
-		prefetchSlots:       make(chan struct{}, 2),
-		prefetchedImages:    make(map[string]*imagedata.DecodedImage),
-		thumbnailResults:    make(chan thumbnailResult, thumbnailCacheLimit),
-		thumbnailInFlight:   make(map[string]bool),
-		thumbnailFailed:     make(map[string]bool),
-		thumbnailCache:      make(map[string]*thumbnailCacheEntry),
-		imageViewStates:     loadImageViewStates(),
+		// Image decoders temporarily allocate the original pixel buffer even
+		// when only a preview is retained. Serializing them bounds that peak to
+		// one full CPU image at a time across display, prefetch and thumbnails.
+		// Allow two independent image decodes to use the CPU concurrently.
+		// This matches the thumbnail worker limit while keeping the temporary
+		// full-resolution memory peak bounded.
+		decodeSlots:       make(chan struct{}, 2),
+		prefetchedImages:  make(map[string]*imagedata.LoadedImage),
+		thumbnailResults:  make(chan thumbnailResult, thumbnailCacheLimit),
+		thumbnailInFlight: make(map[string]bool),
+		thumbnailFailed:   make(map[string]bool),
+		thumbnailCache:    make(map[string]*thumbnailCacheEntry),
+		imageViewStates:   loadImageViewStates(),
 	}
 
 	ebiten.SetWindowResizable(true)

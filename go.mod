@@ -1,8 +1,9 @@
 module viewergo
 
-go 1.26
+go 1.26.4
 
 require (
+	github.com/gen2brain/jpegn v0.6.1
 	github.com/hajimehoshi/ebiten/v2 v2.9.9
 	golang.org/x/image v0.32.0
 )

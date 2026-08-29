@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/hajimehoshi/ebiten/v2"
+
 	imagedata "viewergo/internal/image"
 )
 
@@ -44,12 +46,14 @@ func (v *Viewer) navigationImagePathsForSlideshow() ([]string, int, error) {
 }
 
 func (v *Viewer) loadNavigationImage(nextPath string) {
-	if decoded := v.takePrefetchedImage(nextPath); decoded != nil {
+	if loaded := v.takePrefetchedImage(nextPath); loaded != nil {
 		// Invalidate an older asynchronous navigation result before applying
 		// the cached image immediately.
 		v.trackPendingImageLoad(asyncImageSlotA, 0)
 		v.loadingImageName = ""
-		v.applyDecodedImage(asyncImageSlotA, decoded, true, false, true)
+		v.applyLoadedImage(asyncImageSlotA, loaded, true, false, true, func() (*imagedata.DecodedImage, error) {
+			return imagedata.DecodeFile(nextPath)
+		})
 		return
 	}
 
@@ -123,21 +127,26 @@ func (v *Viewer) startPrefetch(path string) {
 		return
 	}
 	v.prefetchInFlight[path] = true
+	maxDimension := v.previewDimension()
 	go func() {
-		v.prefetchSlots <- struct{}{}
-		decoded, err := imagedata.DecodeFileForDisplay(path, 1920)
-		<-v.prefetchSlots
+		v.decodeSlots <- struct{}{}
+		decoded, err := imagedata.DecodeFileForDisplay(path, maxDimension)
+		<-v.decodeSlots
 		v.prefetchResults <- prefetchedImageResult{path: path, decoded: decoded, err: err}
+		ebiten.ScheduleFrame()
 	}()
 }
 
-func (v *Viewer) cachePrefetchedImage(path string, decoded *imagedata.DecodedImage) {
+func (v *Viewer) cachePrefetchedImage(path string, loaded *imagedata.LoadedImage) {
+	if loaded == nil {
+		return
+	}
 	if !v.isWantedPrefetchPath(path) {
-		decoded.Release()
+		loaded.Release()
 		return
 	}
 	if _, exists := v.prefetchedImages[path]; exists {
-		decoded.Release()
+		loaded.Release()
 		return
 	}
 	if len(v.prefetchOrder) >= prefetchedImageCacheLimit {
@@ -146,7 +155,7 @@ func (v *Viewer) cachePrefetchedImage(path string, decoded *imagedata.DecodedIma
 		v.prefetchedImages[oldest].Release()
 		delete(v.prefetchedImages, oldest)
 	}
-	v.prefetchedImages[path] = decoded
+	v.prefetchedImages[path] = loaded
 	v.prefetchOrder = append(v.prefetchOrder, path)
 }
 
@@ -168,9 +177,9 @@ func (v *Viewer) isWantedPrefetchPath(path string) bool {
 }
 
 func (v *Viewer) removePrefetchedImage(path string) {
-	decoded := v.prefetchedImages[path]
-	if decoded != nil {
-		decoded.Release()
+	loaded := v.prefetchedImages[path]
+	if loaded != nil {
+		loaded.Release()
 		delete(v.prefetchedImages, path)
 	}
 	for i, cachedPath := range v.prefetchOrder {
@@ -181,9 +190,9 @@ func (v *Viewer) removePrefetchedImage(path string) {
 	}
 }
 
-func (v *Viewer) takePrefetchedImage(path string) *imagedata.DecodedImage {
-	decoded := v.prefetchedImages[path]
-	if decoded == nil {
+func (v *Viewer) takePrefetchedImage(path string) *imagedata.LoadedImage {
+	loaded := v.prefetchedImages[path]
+	if loaded == nil {
 		return nil
 	}
 	delete(v.prefetchedImages, path)
@@ -193,5 +202,5 @@ func (v *Viewer) takePrefetchedImage(path string) *imagedata.DecodedImage {
 			break
 		}
 	}
-	return decoded
+	return loaded
 }

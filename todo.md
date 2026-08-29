@@ -36,7 +36,7 @@ les prochaines actions proposées.
   qu'une rotation, un miroir ou un fit n'écrase l'état d'une autre animation.
 - [ ] Renforcer la gestion des images très grandes : limite mémoire, allocations
   bornées et message d'erreur explicite.
-- [ ] Remplacer `fullResolutionUploadEnabled` par une stratégie documentée de
+- [x] Remplacer `fullResolutionUploadEnabled` par une stratégie documentée de
   preview et de chargement haute résolution.
 - [ ] Corriger le nettoyage du script PowerShell avec `try/finally` et
   restauration des variables d'environnement en cas d'échec.
