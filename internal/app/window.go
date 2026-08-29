@@ -219,6 +219,9 @@ func (v *Viewer) enterBorderlessMaximized() {
 	// the native GDI capture path again after a fullscreen/restore cycle.
 	if v.desktopBackdrop == nil && v.desktopBackground {
 		v.desktopBackdrop = captureDesktopBackdrop()
+		debugf("enter fullscreen: desktop backdrop captured=%v", v.desktopBackdrop != nil)
+	} else {
+		debugf("enter fullscreen: capture skipped backdropPresent=%v desktopBackground=%v", v.desktopBackdrop != nil, v.desktopBackground)
 	}
 	v.prepareSliderRestore()
 	v.prepareViewportRebase()

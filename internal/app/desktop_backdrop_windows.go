@@ -51,7 +51,6 @@ var (
 	user32              = syscall.NewLazyDLL("user32.dll")
 	kernel32            = syscall.NewLazyDLL("kernel32.dll")
 	gdi32               = syscall.NewLazyDLL("gdi32.dll")
-	dwmapi              = syscall.NewLazyDLL("dwmapi.dll")
 	getCurrentProcessID = kernel32.NewProc("GetCurrentProcessId")
 	enumWindows         = user32.NewProc("EnumWindows")
 	getForegroundWindow = user32.NewProc("GetForegroundWindow")
@@ -63,48 +62,56 @@ var (
 	getMonitorInfo      = user32.NewProc("GetMonitorInfoW")
 	getDC               = user32.NewProc("GetDC")
 	releaseDC           = user32.NewProc("ReleaseDC")
-	getDIBits           = gdi32.NewProc("GetDIBits")
 	createCompatibleDC  = gdi32.NewProc("CreateCompatibleDC")
-	createCompatibleBmp = gdi32.NewProc("CreateCompatibleBitmap")
+	createDIBSection    = gdi32.NewProc("CreateDIBSection")
 	selectObject        = gdi32.NewProc("SelectObject")
 	bitBlt              = gdi32.NewProc("BitBlt")
 	deleteObject        = gdi32.NewProc("DeleteObject")
 	deleteDC            = gdi32.NewProc("DeleteDC")
-	dwmFlush            = dwmapi.NewProc("DwmFlush")
 )
 
 func captureDesktopBackdrop() *ebiten.Image {
 	hwnd := applicationWindow()
 	hideWindow := true
+	debugf("desktop capture: application hwnd=%#x", hwnd)
 	if hwnd == 0 {
 		// Capturing without hiding is less ideal because PicaGo may appear in
 		// the screenshot, but it is safer than touching another application.
 		hwnd, _, _ = getForegroundWindow.Call()
 		hideWindow = false
+		debugf("desktop capture: no application window found, fallback foreground hwnd=%#x", hwnd)
 	}
 	if hwnd == 0 {
+		debugf("desktop capture: failed, no window handle")
 		return nil
 	}
 
 	monitor, _, _ := monitorFromWindow.Call(hwnd, monitorDefaultNearest)
 	if monitor == 0 {
+		debugf("desktop capture: MonitorFromWindow failed: %v", syscall.GetLastError())
 		return nil
 	}
 	info := monitorInfo{size: uint32(unsafe.Sizeof(monitorInfo{}))}
 	if ret, _, _ := getMonitorInfo.Call(monitor, uintptr(unsafe.Pointer(&info))); ret == 0 {
+		debugf("desktop capture: GetMonitorInfoW failed: %v", syscall.GetLastError())
 		return nil
 	}
 
 	width := int(info.monitor.right - info.monitor.left)
 	height := int(info.monitor.bottom - info.monitor.top)
 	if width <= 0 || height <= 0 {
+		debugf("desktop capture: invalid monitor rectangle: left=%d top=%d right=%d bottom=%d", info.monitor.left, info.monitor.top, info.monitor.right, info.monitor.bottom)
 		return nil
 	}
+	debugf("desktop capture: monitor=%#x rect=(%d,%d)-(%d,%d) size=%dx%d hide=%v", monitor, info.monitor.left, info.monitor.top, info.monitor.right, info.monitor.bottom, width, height, hideWindow)
 
 	if hideWindow {
 		// Hide PicaGo so the capture contains what is behind it.
 		showWindow.Call(hwnd, swHide)
-		dwmFlush.Call()
+		// Do not call DwmFlush here. This function runs from Ebiten's update
+		// loop, and waiting synchronously for the compositor can deadlock (or
+		// appear to freeze the application) while the window is transitioning
+		// from windowed to fullscreen.
 		defer func() {
 			showWindow.Call(hwnd, swShow)
 			setForegroundWindow.Call(hwnd)
@@ -113,18 +120,26 @@ func captureDesktopBackdrop() *ebiten.Image {
 
 	screenDC, _, _ := getDC.Call(0)
 	if screenDC == 0 {
+		debugf("desktop capture: GetDC(NULL) failed: %v", syscall.GetLastError())
 		return nil
 	}
 	defer releaseDC.Call(0, screenDC)
 
 	memDC, _, _ := createCompatibleDC.Call(screenDC)
 	if memDC == 0 {
+		debugf("desktop capture: CreateCompatibleDC failed: %v", syscall.GetLastError())
 		return nil
 	}
 	defer deleteDC.Call(memDC)
 
-	bmp, _, _ := createCompatibleBmp.Call(screenDC, uintptr(width), uintptr(height))
+	var bitmapPixels unsafe.Pointer
+	bi := bitmapInfo{header: bitmapInfoHeader{
+		size: uint32(unsafe.Sizeof(bitmapInfoHeader{})), width: int32(width), height: -int32(height),
+		planes: 1, bitCount: 32,
+	}}
+	bmp, _, _ := createDIBSection.Call(screenDC, uintptr(unsafe.Pointer(&bi)), dibRGBColors, uintptr(unsafe.Pointer(&bitmapPixels)), 0, 0)
 	if bmp == 0 {
+		debugf("desktop capture: CreateDIBSection failed: %v", syscall.GetLastError())
 		return nil
 	}
 	defer deleteObject.Call(bmp)
@@ -133,20 +148,18 @@ func captureDesktopBackdrop() *ebiten.Image {
 	if ret, _, _ := bitBlt.Call(memDC, 0, 0, uintptr(width), uintptr(height), screenDC,
 		uintptr(info.monitor.left), uintptr(info.monitor.top), srccopy|captureblt); ret == 0 {
 		selectObject.Call(memDC, previous)
+		debugf("desktop capture: BitBlt failed: %v", syscall.GetLastError())
 		return nil
 	}
-	// GetDIBits requires the bitmap not to be selected into a device context.
 	selectObject.Call(memDC, previous)
 
-	pixels := make([]byte, width*height*4)
-	bi := bitmapInfo{header: bitmapInfoHeader{
-		size: uint32(unsafe.Sizeof(bitmapInfoHeader{})), width: int32(width), height: -int32(height),
-		planes: 1, bitCount: 32,
-	}}
-	if ret, _, _ := getDIBits.Call(screenDC, bmp, 0, uintptr(height), uintptr(unsafe.Pointer(&pixels[0])),
-		uintptr(unsafe.Pointer(&bi)), dibRGBColors); ret == 0 {
+	if bitmapPixels == nil {
+		debugf("desktop capture: CreateDIBSection returned no pixel buffer")
 		return nil
 	}
+	pixelCount := width * height * 4
+	pixels := make([]byte, pixelCount)
+	copy(pixels, unsafe.Slice((*byte)(bitmapPixels), pixelCount))
 
 	rgba := image.NewRGBA(image.Rect(0, 0, width, height))
 	for i := 0; i < len(pixels); i += 4 {
@@ -155,6 +168,7 @@ func captureDesktopBackdrop() *ebiten.Image {
 		rgba.Pix[i+2] = pixels[i+0]
 		rgba.Pix[i+3] = 255
 	}
+	debugf("desktop capture: success, image=%dx%d", width, height)
 	return ebiten.NewImageFromImage(rgba)
 }
 

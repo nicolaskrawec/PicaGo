@@ -236,6 +236,8 @@ type Viewer struct {
 
 func Run(args []string) error {
 	cfg := loadConfig()
+	initDebugLogging(cfg.ShowDebug)
+	debugf("startup: args=%d desktopBackground=%v background=%q", len(args), cfg.DesktopBackground, cfg.Background)
 	game := &Viewer{
 		mode:                displayModeSingleA,
 		windowWidth:         640,
