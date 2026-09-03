@@ -5,5 +5,5 @@
   "slideshowIntervalSeconds": 1,
   "animateOnStart": true,
   "showDebug": false,
-  "graphicsLibrary": "opengl"
+  "graphicsLibrary": "auto"
 }
