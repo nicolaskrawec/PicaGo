@@ -343,6 +343,9 @@ func (v *Viewer) shouldStayActive(now time.Time, mouseMoved, leftMousePressed, r
 	if v.thumbnailLoadFadeActive(now) {
 		return true
 	}
+	if v.thumbnailAnimationActive {
+		return true
+	}
 
 	return ebiten.IsKeyPressed(ebiten.KeyEscape) ||
 		ebiten.IsKeyPressed(ebiten.KeyR) ||

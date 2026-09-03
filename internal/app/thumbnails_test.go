@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	stdimage "image"
 	"math"
 	"os"
 	"path/filepath"
@@ -67,6 +68,166 @@ func TestSmallWindowShowsOnlyCurrentThumbnail(t *testing.T) {
 	}
 }
 
+func TestThumbnailSizeUsesHorizontalDistanceFromCenter(t *testing.T) {
+	tests := []struct {
+		x    float64
+		want int
+	}{
+		{x: 0, want: 80},
+		{x: 50, want: 65},
+		{x: 100, want: 56},
+		{x: 250, want: 51},
+	}
+	for _, test := range tests {
+		if got := thumbnailSizeAtX(test.x); got != test.want {
+			t.Errorf("x = %v: thumbnail size = %d, want %d", test.x, got, test.want)
+		}
+		if got := thumbnailSizeAtX(-test.x); got != test.want {
+			t.Errorf("x = %v: thumbnail size = %d, want symmetric size %d", -test.x, got, test.want)
+		}
+	}
+}
+
+func TestThumbnailRectsUseFormulaAndRemainSymmetric(t *testing.T) {
+	current := thumbnailRect(1000, 700, 0)
+	previousRight := current
+	for distance := 1; distance <= thumbnailMaxRadius; distance++ {
+		right := thumbnailRect(1000, 700, distance)
+		left := thumbnailRect(1000, 700, -distance)
+		x := float64(right.Min.X+right.Max.X)/2 - 500
+		if got, want := right.Dx(), thumbnailSizeAtX(x); got != want {
+			t.Fatalf("distance %d: width = %d, formula gives %d", distance, got, want)
+		}
+		if right.Dx() != right.Dy() {
+			t.Fatalf("distance %d: thumbnail is %dx%d, want square", distance, right.Dx(), right.Dy())
+		}
+		if left.Dx() != right.Dx() || left.Min.X != 1000-right.Max.X || left.Max.X != 1000-right.Min.X {
+			t.Fatalf("distance %d: left %v and right %v are not symmetric", distance, left, right)
+		}
+		if gap := right.Min.X - previousRight.Max.X; gap != thumbnailGap {
+			t.Fatalf("distance %d: gap = %d, want %d", distance, gap, thumbnailGap)
+		}
+		previousRight = right
+	}
+}
+
+func TestThumbnailTransitionMovesAndResizesSelectedImage(t *testing.T) {
+	images := make([]string, 25)
+	for index := range images {
+		images[index] = fmt.Sprintf("%02d", index)
+	}
+	fromIndex, toIndex := 12, 13
+	fromItems := visibleThumbnailItems(images, fromIndex, 1000, 700)
+	transition := buildThumbnailTransition(fromItems, images, fromIndex, toIndex, 1000, 700)
+	startedAt := time.Now()
+	v := Viewer{
+		thumbnailAnimationActive: true,
+		thumbnailAnimationStart:  startedAt,
+		thumbnailAnimationItems:  transition,
+		windowWidth:              1000,
+	}
+
+	findItem := func(items []thumbnailItem, path string) thumbnailItem {
+		t.Helper()
+		for _, item := range items {
+			if item.path == path {
+				return item
+			}
+		}
+		t.Fatalf("thumbnail %q is missing", path)
+		return thumbnailItem{}
+	}
+
+	selectedPath := images[toIndex]
+	start := findItem(v.currentThumbnailItemsAt(startedAt), selectedPath)
+	middle := findItem(v.currentThumbnailItemsAt(startedAt.Add(thumbnailMoveDuration/2)), selectedPath)
+	end := findItem(v.currentThumbnailItemsAt(startedAt.Add(thumbnailMoveDuration)), selectedPath)
+	if start.rect != thumbnailRect(1000, 700, 1) {
+		t.Fatalf("selected thumbnail starts at %v, want old position %v", start.rect, thumbnailRect(1000, 700, 1))
+	}
+	if end.rect != thumbnailRect(1000, 700, 0) || !end.current {
+		t.Fatalf("selected thumbnail ends at %v (current %v), want centered current thumbnail", end.rect, end.current)
+	}
+	if middle.rect.Min.X >= start.rect.Min.X || middle.rect.Min.X <= end.rect.Min.X {
+		t.Fatalf("selected thumbnail middle position %v is not between %v and %v", middle.rect, start.rect, end.rect)
+	}
+	if middle.rect.Dx() <= start.rect.Dx() || middle.rect.Dx() >= end.rect.Dx() {
+		t.Fatalf("selected thumbnail middle width %d is not between %d and %d", middle.rect.Dx(), start.rect.Dx(), end.rect.Dx())
+	}
+}
+
+func TestThumbnailTransitionFadesStripEdges(t *testing.T) {
+	images := make([]string, 25)
+	for index := range images {
+		images[index] = fmt.Sprintf("%02d", index)
+	}
+	fromIndex, toIndex := 12, 13
+	fromItems := visibleThumbnailItems(images, fromIndex, 600, 700)
+	transition := buildThumbnailTransition(fromItems, images, fromIndex, toIndex, 600, 700)
+
+	var entering, leaving thumbnailTransitionItem
+	for _, item := range transition {
+		switch item.path {
+		case images[17]:
+			entering = item
+		case images[8]:
+			leaving = item
+		}
+	}
+	if entering.fromOpacity != 0 || entering.toOpacity <= 0 {
+		t.Fatalf("entering thumbnail opacity = %v -> %v, want fade in", entering.fromOpacity, entering.toOpacity)
+	}
+	if leaving.fromOpacity <= 0 || leaving.toOpacity != 0 {
+		t.Fatalf("leaving thumbnail opacity = %v -> %v, want fade out", leaving.fromOpacity, leaving.toOpacity)
+	}
+}
+
+func TestInterruptedThumbnailTransitionStartsFromCurrentGeometry(t *testing.T) {
+	images := make([]string, 25)
+	for index := range images {
+		images[index] = fmt.Sprintf("%02d", index)
+	}
+	first := buildThumbnailTransition(
+		visibleThumbnailItems(images, 12, 1000, 700), images, 12, 13, 1000, 700,
+	)
+	startedAt := time.Now()
+	v := Viewer{
+		thumbnailAnimationActive: true,
+		thumbnailAnimationStart:  startedAt,
+		thumbnailAnimationItems:  first,
+		windowWidth:              1000,
+	}
+	snapshot := v.currentThumbnailItemsAt(startedAt.Add(thumbnailMoveDuration / 3))
+	second := buildThumbnailTransition(snapshot, images, 13, 14, 1000, 700)
+
+	fromByPath := make(map[string]stdimage.Rectangle, len(second))
+	for _, item := range second {
+		fromByPath[item.path] = item.fromRect
+	}
+	for _, item := range snapshot {
+		if got := fromByPath[item.path]; got != item.rect {
+			t.Fatalf("thumbnail %q restarted at %v, want current geometry %v", item.path, got, item.rect)
+		}
+	}
+}
+
+func TestThumbnailAnimationStopsAfterDuration(t *testing.T) {
+	startedAt := time.Now()
+	v := Viewer{
+		thumbnailAnimationActive: true,
+		thumbnailAnimationStart:  startedAt,
+		thumbnailAnimationItems:  []thumbnailTransitionItem{{path: "image"}},
+	}
+	v.updateThumbnailAnimation(startedAt.Add(thumbnailMoveDuration - time.Millisecond))
+	if !v.thumbnailAnimationActive {
+		t.Fatal("thumbnail animation stopped too early")
+	}
+	v.updateThumbnailAnimation(startedAt.Add(thumbnailMoveDuration))
+	if v.thumbnailAnimationActive || v.thumbnailAnimationItems != nil {
+		t.Fatal("thumbnail animation did not stop after its duration")
+	}
+}
+
 func TestThumbnailsShowOnlyNearBottomWhileCursorIsActive(t *testing.T) {
 	now := time.Now()
 	v := Viewer{
@@ -106,7 +267,7 @@ func TestThumbnailVisibilityFadesInAndOut(t *testing.T) {
 }
 
 func TestThumbnailOpacityDecreasesWithDistance(t *testing.T) {
-	wants := []float64{0.8, 0.7, 0.6, 0.5, 0.4}
+	wants := []float64{1, 0.9, 0.8, 0.7, 0.6}
 	for distance, want := range wants {
 		if got := thumbnailItemOpacity(distance); math.Abs(got-want) > 0.0001 {
 			t.Errorf("distance %d opacity = %v, want %v", distance, got, want)

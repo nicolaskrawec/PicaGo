@@ -23,6 +23,7 @@ func (v *Viewer) Update() error {
 	v.collectPrefetchedImages()
 	v.collectThumbnails()
 	v.ensureVisibleThumbnails()
+	v.updateThumbnailAnimation(now)
 
 	if v.pendingInitialBorderless {
 		v.enterFromNativeMaximize = false

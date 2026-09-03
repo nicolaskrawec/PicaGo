@@ -215,6 +215,13 @@ func (v *Viewer) applyLoadedImage(slot asyncImageSlot, loaded *imagedata.LoadedI
 
 	v.loadError = ""
 	v.pendingHighRes[slot] = nil
+	if slot == asyncImageSlotA {
+		fromPath := ""
+		if v.imageA != nil {
+			fromPath = v.imageA.FilePath
+		}
+		v.startThumbnailAnimation(fromPath, loaded.FilePath, time.Now())
+	}
 	v.rememberCurrentImageView()
 	// Persist the previous image's state when a new image is applied. Changes
 	// made while viewing the current image remain in memory until this point

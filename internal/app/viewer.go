@@ -243,6 +243,9 @@ type Viewer struct {
 	thumbnailDirectory         string
 	thumbnailOpacity           float64
 	hoveredThumbnailPath       string
+	thumbnailAnimationActive   bool
+	thumbnailAnimationStart    time.Time
+	thumbnailAnimationItems    []thumbnailTransitionItem
 	pendingHighRes             [2]*pendingHighResImage
 	prefetchAfterHighRes       *imagedata.LoadedImage
 	navigationDirectory        string
@@ -351,6 +354,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	// the split position while the old viewport is still available so it can be
 	// restored relative to the image after the resize.
 	if newWidth != v.windowWidth || newHeight != v.windowHeight {
+		v.stopThumbnailAnimation()
 		v.prepareSliderRestore()
 		if v.fitMode {
 			// A resize should settle on the new fit immediately instead of

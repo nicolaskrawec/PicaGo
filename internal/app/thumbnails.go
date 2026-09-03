@@ -2,6 +2,8 @@ package app
 
 import (
 	stdimage "image"
+	"math"
+	"path/filepath"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -10,14 +12,14 @@ import (
 )
 
 const (
-	thumbnailBoxWidth      = 70
-	thumbnailBoxHeight     = 70
-	thumbnailCurrentWidth  = 90
-	thumbnailCurrentHeight = 90
+	thumbnailMinSize       = 50.0
+	thumbnailSizeAmplitude = 30.0
+	thumbnailSizeFalloff   = 50.0
 	thumbnailGap           = 2
 	thumbnailBottomMargin  = 10
 	thumbnailMaxRadius     = 8
 	thumbnailPreloadRadius = 16
+	thumbnailMoveDuration  = 280 * time.Millisecond
 )
 
 type thumbnailResult struct {
@@ -37,36 +39,81 @@ type thumbnailItem struct {
 	rect     stdimage.Rectangle
 	current  bool
 	distance int
+	opacity  float64
+}
+
+type thumbnailTransitionItem struct {
+	path        string
+	fromRect    stdimage.Rectangle
+	toRect      stdimage.Rectangle
+	fromOpacity float64
+	toOpacity   float64
+	current     bool
+	distance    int
 }
 
 func thumbnailRadius(windowWidth int) int {
-	available := windowWidth/2 - thumbnailCurrentWidth/2 - thumbnailBottomMargin
-	if available <= 0 {
+	if windowWidth <= 0 {
 		return 0
 	}
-	radius := available / (thumbnailBoxWidth + thumbnailGap)
-	if radius > thumbnailMaxRadius {
-		return thumbnailMaxRadius
+	for radius := 1; radius <= thumbnailMaxRadius; radius++ {
+		left := thumbnailRect(windowWidth, 1, -radius)
+		right := thumbnailRect(windowWidth, 1, radius)
+		if left.Min.X < thumbnailBottomMargin || right.Max.X > windowWidth-thumbnailBottomMargin {
+			return radius - 1
+		}
 	}
-	return radius
+	return thumbnailMaxRadius
+}
+
+func thumbnailSizeAtX(x float64) int {
+	scaledX := x / thumbnailSizeFalloff
+	return int(math.Round(thumbnailMinSize + thumbnailSizeAmplitude/(1+scaledX*scaledX)))
+}
+
+func nextThumbnailSize(centerOffset, previousSize float64) int {
+	size := thumbnailSizeAtX(centerOffset + previousSize/2 + thumbnailGap + thumbnailMinSize/2)
+	for range 4 {
+		nextCenterOffset := centerOffset + previousSize/2 + thumbnailGap + float64(size)/2
+		nextSize := thumbnailSizeAtX(nextCenterOffset)
+		if nextSize == size {
+			break
+		}
+		size = nextSize
+	}
+	return size
 }
 
 func thumbnailRect(windowWidth, windowHeight, offset int) stdimage.Rectangle {
-	width, height := thumbnailBoxWidth, thumbnailBoxHeight
 	centerX := windowWidth / 2
-	if offset == 0 {
-		width, height = thumbnailCurrentWidth, thumbnailCurrentHeight
-	} else {
-		distance := absInt(offset)
-		centerOffset := thumbnailCurrentWidth/2 + thumbnailGap + thumbnailBoxWidth/2 +
-			(distance-1)*(thumbnailBoxWidth+thumbnailGap)
-		if offset < 0 {
-			centerOffset = -centerOffset
-		}
-		centerX += centerOffset
-	}
 	bottom := maxInt(0, windowHeight-thumbnailBottomMargin)
-	return stdimage.Rect(centerX-width/2, bottom-height, centerX+(width-width/2), bottom)
+	currentSize := thumbnailSizeAtX(0)
+	current := stdimage.Rect(
+		centerX-currentSize/2,
+		bottom-currentSize,
+		centerX+(currentSize-currentSize/2),
+		bottom,
+	)
+	if offset == 0 {
+		return current
+	}
+
+	// Lay out the right side first. Each thumbnail's center determines its
+	// size, while the previous rectangle anchors it so integer rounding never
+	// changes the requested gap. The left side is its exact mirror.
+	centerOffset := 0.0
+	previousSize := float64(currentSize)
+	right := current
+	for distance := 1; distance <= absInt(offset); distance++ {
+		size := nextThumbnailSize(centerOffset, previousSize)
+		centerOffset += previousSize/2 + thumbnailGap + float64(size)/2
+		right = stdimage.Rect(right.Max.X+thumbnailGap, bottom-size, right.Max.X+thumbnailGap+size, bottom)
+		previousSize = float64(size)
+	}
+	if offset > 0 {
+		return right
+	}
+	return stdimage.Rect(2*centerX-right.Max.X, right.Min.Y, 2*centerX-right.Min.X, right.Max.Y)
 }
 
 func visibleThumbnailItems(images []string, currentIndex, windowWidth, windowHeight int) []thumbnailItem {
@@ -82,13 +129,13 @@ func visibleThumbnailItems(images []string, currentIndex, windowWidth, windowHei
 		}
 		items = append(items, thumbnailItem{
 			path: images[index], rect: thumbnailRect(windowWidth, windowHeight, offset), current: offset == 0,
-			distance: absInt(offset),
+			distance: absInt(offset), opacity: thumbnailItemOpacity(absInt(offset)),
 		})
 	}
 	return items
 }
 
-func (v *Viewer) currentThumbnailItems() []thumbnailItem {
+func (v *Viewer) targetThumbnailItems() []thumbnailItem {
 	if v.imageA == nil || v.imageA.FilePath == "" {
 		return nil
 	}
@@ -97,6 +144,145 @@ func (v *Viewer) currentThumbnailItems() []thumbnailItem {
 		return nil
 	}
 	return visibleThumbnailItems(images, currentIndex, v.windowWidth, v.windowHeight)
+}
+
+func (v *Viewer) currentThumbnailItems() []thumbnailItem {
+	return v.currentThumbnailItemsAt(time.Now())
+}
+
+func (v *Viewer) currentThumbnailItemsAt(now time.Time) []thumbnailItem {
+	if !v.thumbnailAnimationActive || len(v.thumbnailAnimationItems) == 0 {
+		return v.targetThumbnailItems()
+	}
+	progress := thumbnailAnimationProgress(v.thumbnailAnimationStart, now)
+	items := make([]thumbnailItem, 0, len(v.thumbnailAnimationItems))
+	for _, transition := range v.thumbnailAnimationItems {
+		items = append(items, thumbnailItem{
+			path:     transition.path,
+			rect:     interpolateThumbnailRect(transition.fromRect, transition.toRect, progress),
+			current:  transition.current,
+			distance: transition.distance,
+			opacity:  interpolateFloat64(transition.fromOpacity, transition.toOpacity, progress),
+		})
+	}
+	return items
+}
+
+func thumbnailAnimationProgress(start, now time.Time) float64 {
+	progress := clampFloat64(float64(now.Sub(start))/float64(thumbnailMoveDuration), 0, 1)
+	return progress * progress * (3 - 2*progress)
+}
+
+func interpolateThumbnailRect(from, to stdimage.Rectangle, progress float64) stdimage.Rectangle {
+	return stdimage.Rect(
+		interpolateInt(from.Min.X, to.Min.X, progress),
+		interpolateInt(from.Min.Y, to.Min.Y, progress),
+		interpolateInt(from.Max.X, to.Max.X, progress),
+		interpolateInt(from.Max.Y, to.Max.Y, progress),
+	)
+}
+
+func interpolateInt(from, to int, progress float64) int {
+	return int(math.Round(float64(from) + float64(to-from)*progress))
+}
+
+func interpolateFloat64(from, to, progress float64) float64 {
+	return from + (to-from)*progress
+}
+
+func buildThumbnailTransition(
+	currentItems []thumbnailItem,
+	images []string,
+	fromIndex, toIndex, windowWidth, windowHeight int,
+) []thumbnailTransitionItem {
+	targetItems := visibleThumbnailItems(images, toIndex, windowWidth, windowHeight)
+	fromByPath := make(map[string]thumbnailItem, len(currentItems))
+	targetByPath := make(map[string]thumbnailItem, len(targetItems))
+	selectedPaths := make(map[string]bool, len(currentItems)+len(targetItems))
+	for _, item := range currentItems {
+		fromByPath[item.path] = item
+		selectedPaths[item.path] = true
+	}
+	for _, item := range targetItems {
+		targetByPath[item.path] = item
+		selectedPaths[item.path] = true
+	}
+
+	transition := make([]thumbnailTransitionItem, 0, len(selectedPaths))
+	for index, path := range images {
+		if !selectedPaths[path] {
+			continue
+		}
+		fromItem, hasFrom := fromByPath[path]
+		if !hasFrom {
+			fromItem = thumbnailItem{
+				path: path,
+				rect: thumbnailRect(windowWidth, windowHeight, index-fromIndex),
+			}
+		}
+		toItem, hasTarget := targetByPath[path]
+		if !hasTarget {
+			toItem = thumbnailItem{
+				path:     path,
+				rect:     thumbnailRect(windowWidth, windowHeight, index-toIndex),
+				distance: absInt(index - toIndex),
+			}
+		}
+		transition = append(transition, thumbnailTransitionItem{
+			path:        path,
+			fromRect:    fromItem.rect,
+			toRect:      toItem.rect,
+			fromOpacity: fromItem.opacity,
+			toOpacity:   toItem.opacity,
+			current:     hasTarget && toItem.current,
+			distance:    toItem.distance,
+		})
+	}
+	return transition
+}
+
+func (v *Viewer) startThumbnailAnimation(fromPath, toPath string, now time.Time) {
+	currentItems := v.currentThumbnailItemsAt(now)
+	v.thumbnailAnimationActive = false
+	if fromPath == "" || toPath == "" || fromPath == toPath ||
+		filepath.Clean(filepath.Dir(fromPath)) != filepath.Clean(filepath.Dir(toPath)) {
+		v.thumbnailAnimationItems = nil
+		return
+	}
+	images, fromIndex, err := v.navigationImagePaths(fromPath)
+	if err != nil || fromIndex < 0 {
+		v.thumbnailAnimationItems = nil
+		return
+	}
+	toIndex := -1
+	for index, path := range images {
+		if filepath.Base(path) == filepath.Base(toPath) {
+			toIndex = index
+			break
+		}
+	}
+	if toIndex < 0 || toIndex == fromIndex {
+		v.thumbnailAnimationItems = nil
+		return
+	}
+
+	v.thumbnailAnimationItems = buildThumbnailTransition(
+		currentItems, images, fromIndex, toIndex, v.windowWidth, v.windowHeight,
+	)
+	v.thumbnailAnimationStart = now
+	v.thumbnailAnimationActive = len(v.thumbnailAnimationItems) > 0
+}
+
+func (v *Viewer) updateThumbnailAnimation(now time.Time) {
+	if !v.thumbnailAnimationActive || now.Before(v.thumbnailAnimationStart.Add(thumbnailMoveDuration)) {
+		return
+	}
+	v.stopThumbnailAnimation()
+}
+
+func (v *Viewer) stopThumbnailAnimation() {
+	v.thumbnailAnimationActive = false
+	v.thumbnailAnimationItems = nil
 }
 
 func (v *Viewer) wantedThumbnailPaths() []string {
@@ -280,12 +466,12 @@ func (v *Viewer) drawThumbnailStrip(screen *ebiten.Image) {
 	if v.thumbnailOpacity <= 0.01 {
 		return
 	}
-	items := v.currentThumbnailItems()
+	now := time.Now()
+	items := v.currentThumbnailItemsAt(now)
 	if len(items) == 0 {
 		return
 	}
 
-	now := time.Now()
 	for _, item := range items {
 		if !item.current {
 			v.drawThumbnailItem(screen, item, now)
@@ -305,7 +491,11 @@ func (v *Viewer) drawThumbnailItem(screen *ebiten.Image, item thumbnailItem, now
 		return
 	}
 	hovered := item.path == v.hoveredThumbnailPath
-	itemOpacity := thumbnailItemDisplayOpacity(item.distance, hovered) * v.thumbnailOpacity * thumbnailLoadOpacity(entry, now)
+	itemOpacity := item.opacity
+	if hovered {
+		itemOpacity = 1
+	}
+	itemOpacity *= v.thumbnailOpacity * thumbnailLoadOpacity(entry, now)
 	drawThumbnailTexture(screen, entry.texture, item.rect, itemOpacity)
 }
 
@@ -334,7 +524,7 @@ func (v *Viewer) thumbnailLoadFadeActive(now time.Time) bool {
 }
 
 func thumbnailItemOpacity(distance int) float64 {
-	return clampFloat64(0.8-float64(distance)*0.1, 0, 0.8)
+	return clampFloat64(1-float64(distance)*0.1, 0, 1)
 }
 
 func thumbnailItemDisplayOpacity(distance int, hovered bool) float64 {
