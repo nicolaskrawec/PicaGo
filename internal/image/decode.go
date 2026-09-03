@@ -185,7 +185,7 @@ func decodeJPEG(reader io.Reader, fileName, filePath string, maxDimension int) (
 	// A full-resolution load does not need a preliminary header pass. Decode
 	// the source once and obtain dimensions from the resulting image.
 	if maxDimension <= 0 {
-		decoded, err := jpegn.Decode(reader)
+		decoded, err := jpegn.Decode(reader, &jpegn.Options{AutoRotate: true})
 		decodeMethod := "jpegn"
 		if err != nil {
 			// Retry only when the source can be rewound; this preserves the
@@ -214,12 +214,13 @@ func decodeJPEG(reader io.Reader, fileName, filePath string, maxDimension int) (
 	if err != nil {
 		return nil, err
 	}
-	decodeOptions := (*jpegn.Options)(nil)
+	orientation := jpegEXIFOrientation(data)
+	decodeOptions := &jpegn.Options{AutoRotate: true}
 	if maxDimension > 0 {
 		longest := max(config.Width, config.Height)
 		denom := jpegScaleDenom(longest, maxDimension)
 		if denom > 1 {
-			decodeOptions = &jpegn.Options{ScaleDenom: denom}
+			decodeOptions.ScaleDenom = denom
 		}
 	}
 
@@ -235,14 +236,31 @@ func decodeJPEG(reader io.Reader, fileName, filePath string, maxDimension int) (
 		}
 	}
 
+	metadataWidth, metadataHeight := orientedJPEGDimensions(config.Width, config.Height, orientation)
 	result := &DecodedImage{
 		FileName: fileName, FilePath: filePath,
 		DecodeMethod: decodeMethod,
-		Width:        config.Width, Height: config.Height,
+		// AutoRotate can swap the dimensions for EXIF orientations 5-8.
+		Width: metadataWidth, Height: metadataHeight,
 		HasTransparency: false, Image: decoded,
 	}
 	result.Preview = makePreview(decoded, maxDimension)
 	return result, nil
+}
+
+func jpegEXIFOrientation(data []byte) int {
+	exif, err := jpegn.DecodeExif(bytes.NewReader(data))
+	if err != nil || exif.Orientation < 1 || exif.Orientation > 8 {
+		return 1
+	}
+	return exif.Orientation
+}
+
+func orientedJPEGDimensions(width, height, orientation int) (int, int) {
+	if orientation >= 5 && orientation <= 8 {
+		return height, width
+	}
+	return width, height
 }
 
 func decodedImageResult(decoded stddraw.Image, fileName, filePath string) *DecodedImage {

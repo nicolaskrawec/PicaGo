@@ -1,6 +1,7 @@
 package image
 
 import (
+	"bytes"
 	stdimage "image"
 	"image/color"
 	"image/jpeg"
@@ -9,6 +10,50 @@ import (
 	"path/filepath"
 	"testing"
 )
+
+func TestDecodeJPEGAppliesEXIFOrientation(t *testing.T) {
+	source := stdimage.NewRGBA(stdimage.Rect(0, 0, 2, 3))
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, source, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatal(err)
+	}
+	data := addEXIFOrientation(encoded.Bytes(), 6) // Rotate 90° clockwise.
+
+	decoded, err := DecodeBytes(data, "oriented.jpg", "oriented.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := decoded.Image.Bounds().Size(); got.X != 3 || got.Y != 2 {
+		t.Fatalf("oriented image size = %v, want (3,2)", got)
+	}
+	if decoded.Width != 3 || decoded.Height != 2 {
+		t.Fatalf("oriented metadata dimensions = %dx%d, want 3x2", decoded.Width, decoded.Height)
+	}
+
+	preview, err := decodePreviewFromReader(bytes.NewReader(data), "oriented.jpg", "oriented.jpg", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := preview.Preview.Bounds().Size(); got.X != 3 || got.Y != 2 {
+		t.Fatalf("oriented preview size = %v, want (3,2)", got)
+	}
+}
+
+func addEXIFOrientation(jpegData []byte, orientation byte) []byte {
+	// Little-endian TIFF/EXIF block containing one SHORT Orientation tag.
+	exif := []byte{
+		'E', 'x', 'i', 'f', 0, 0,
+		'I', 'I', 42, 0, 8, 0, 0, 0,
+		1, 0,
+		0x12, 0x01, 3, 0, 1, 0, 0, 0,
+		orientation, 0, 0, 0,
+		0, 0, 0, 0,
+	}
+	segmentLength := len(exif) + 2
+	segment := []byte{0xff, 0xe1, byte(segmentLength >> 8), byte(segmentLength)}
+	segment = append(segment, exif...)
+	return append(append(append([]byte{}, jpegData[:2]...), segment...), jpegData[2:]...)
+}
 
 func TestDecodeFileThumbnailBoundsMemoryImage(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "large.png")
