@@ -325,3 +325,28 @@ func TestResetViewParametersRestoresDefaults(t *testing.T) {
 		t.Fatalf("reset should be instantaneous: view=%+v target=%+v animation=%v", v.view, v.targetView, v.viewAnimationActive)
 	}
 }
+
+func TestSessionViewIsStoredInMemoryPerImage(t *testing.T) {
+	const imagePath = `C:\images\one.png`
+	v := Viewer{
+		imageA:     &imagedata.LoadedImage{FilePath: imagePath},
+		targetView: render.View{Zoom: 2.5, OffsetX: 42, OffsetY: -17},
+		fitMode:    false,
+	}
+
+	v.rememberCurrentImageView()
+	got := v.sessionImageViews[imageViewStateKey(imagePath)]
+	if got.Zoom != 2.5 || got.OffsetX != 42 || got.OffsetY != -17 {
+		t.Fatalf("stored session view = %+v, want zoom 2.5 and offsets 42/-17", got)
+	}
+	if _, exists := v.imageViewStates[imageViewStateKey(imagePath)]; exists {
+		t.Fatal("session zoom should not be added to persisted image state")
+	}
+
+	v.fitMode = true
+	v.targetView.Zoom = 1.0
+	v.rememberCurrentImageView()
+	if _, exists := v.sessionImageViews[imageViewStateKey(imagePath)]; exists {
+		t.Fatal("fit mode should clear the session view")
+	}
+}

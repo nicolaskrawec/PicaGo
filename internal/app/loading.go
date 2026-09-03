@@ -228,6 +228,8 @@ func (v *Viewer) applyLoadedImage(slot asyncImageSlot, loaded *imagedata.LoadedI
 	// or until the application closes.
 	_ = saveImageViewStates(v.imageViewStates)
 	savedView, hasSavedView := v.imageViewStates[imageViewStateKey(loaded.FilePath)]
+	sessionView, hasSessionView := v.sessionImageViews[imageViewStateKey(loaded.FilePath)]
+	restoreSessionView := slot == asyncImageSlotA && resetView && hasSessionView && sessionView.Zoom > 0
 	var oldLoaded *imagedata.LoadedImage
 	if resetView {
 		if hasSavedView {
@@ -238,6 +240,29 @@ func (v *Viewer) applyLoadedImage(slot asyncImageSlot, loaded *imagedata.LoadedI
 			v.view = render.View{}
 			v.targetView = v.view
 			v.stopViewAnimation(false)
+		}
+		if restoreSessionView {
+			v.view.Zoom = sessionView.Zoom
+			v.view.OffsetX = sessionView.OffsetX
+			v.view.OffsetY = sessionView.OffsetY
+			v.targetView.Zoom = sessionView.Zoom
+			v.targetView.OffsetX = sessionView.OffsetX
+			v.targetView.OffsetY = sessionView.OffsetY
+			// Persisted view states omit fields whose default value is zero.
+			// Fit normally fills these fields in, but a session view skips the
+			// fit pass, so restore their rendering defaults explicitly.
+			if v.view.Alpha <= 0 {
+				v.view.Alpha = 1
+				v.targetView.Alpha = 1
+			}
+			if v.view.Gamma <= 0 {
+				v.view.Gamma = defaultGamma
+				v.targetView.Gamma = defaultGamma
+			}
+			if v.view.Contrast <= 0 {
+				v.view.Contrast = 1
+				v.targetView.Contrast = 1
+			}
 		}
 	}
 
@@ -250,11 +275,18 @@ func (v *Viewer) applyLoadedImage(slot asyncImageSlot, loaded *imagedata.LoadedI
 			v.mode = displayModeSingleA
 		}
 		v.circleMaskDiameter = defaultCircleMaskDiameterRatio
-		if activateFit {
+		if activateFit && !restoreSessionView {
 			v.fitMode = true
 			v.pendingResetFit = true
 			v.animateInitialFit = animateFit
 			v.skipNextFitAnimation = !animateFit
+		} else if restoreSessionView {
+			// Returning to an image with a session zoom must not trigger the
+			// normal fit pass scheduled for newly opened images.
+			v.fitMode = false
+			v.pendingResetFit = false
+			v.animateInitialFit = false
+			v.skipNextFitAnimation = false
 		}
 	case asyncImageSlotB:
 		oldLoaded = v.imageB
@@ -313,13 +345,27 @@ func (v *Viewer) isCurrentImageLoad(slot asyncImageSlot, id int) bool {
 }
 
 func (v *Viewer) rememberCurrentImageView() {
-	if v.imageA == nil || v.imageA.FilePath == "" || v.imageViewStates == nil {
+	if v.imageA == nil || v.imageA.FilePath == "" {
 		return
 	}
 	// targetView contains the final user-requested transform while an
 	// animation is in progress, which is the state to restore later.
 	key := imageViewStateKey(v.imageA.FilePath)
 	state := v.targetView
+	if v.sessionImageViews == nil {
+		v.sessionImageViews = make(map[string]sessionImageView)
+	}
+	if v.fitMode || state.Zoom <= 0 {
+		delete(v.sessionImageViews, key)
+	} else {
+		v.sessionImageViews[key] = sessionImageView{
+			Zoom: state.Zoom, OffsetX: state.OffsetX, OffsetY: state.OffsetY,
+		}
+	}
+
+	if v.imageViewStates == nil {
+		return
+	}
 	state.Zoom = 0
 	state.OffsetX = 0
 	state.OffsetY = 0

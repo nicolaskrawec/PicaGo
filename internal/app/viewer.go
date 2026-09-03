@@ -60,6 +60,12 @@ type asyncImageResult struct {
 	loadFull    imageDecodeFunc
 }
 
+type sessionImageView struct {
+	Zoom    float64
+	OffsetX float64
+	OffsetY float64
+}
+
 type prefetchedImageResult struct {
 	path    string
 	decoded *imagedata.DecodedImage
@@ -251,16 +257,20 @@ type Viewer struct {
 	navigationDirectory        string
 	navigationImages           []string
 	imageViewStates            map[string]render.View
-	loadingImageName           string
-	loadError                  string
-	desktopBackdrop            *ebiten.Image
-	desktopBackground          bool
-	background                 backgroundMode
-	preferences                config
-	debugMode                  bool
-	centerInfoText             string
-	centerInfoUntil            time.Time
-	centerInfoTexture          *ebiten.Image
+	// Zoom and position are intentionally kept separately from
+	// imageViewStates: they follow the image during this process only and are
+	// never written to disk.
+	sessionImageViews map[string]sessionImageView
+	loadingImageName  string
+	loadError         string
+	desktopBackdrop   *ebiten.Image
+	desktopBackground bool
+	background        backgroundMode
+	preferences       config
+	debugMode         bool
+	centerInfoText    string
+	centerInfoUntil   time.Time
+	centerInfoTexture *ebiten.Image
 }
 
 func Run(args []string) error {
@@ -304,6 +314,7 @@ func Run(args []string) error {
 		thumbnailFailed:   make(map[string]bool),
 		thumbnailCache:    make(map[string]*thumbnailCacheEntry),
 		imageViewStates:   loadImageViewStates(),
+		sessionImageViews: make(map[string]sessionImageView),
 	}
 
 	ebiten.SetWindowResizable(true)
