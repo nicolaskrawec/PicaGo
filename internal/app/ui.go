@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hajimehoshi/ebiten/v2"
+
 	imagedata "viewergo/internal/image"
 )
 
@@ -112,7 +114,12 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 		shadowMode = "on"
 	}
 
-	lines := []string{"PicaGo " + Version + " - NkSoft"}
+	var graphicsInfo ebiten.DebugInfo
+	ebiten.ReadDebugInfo(&graphicsInfo)
+	lines := []string{
+		"PicaGo " + Version + " - NkSoft",
+		"Renderer: " + graphicsInfo.GraphicsLibrary.String(),
+	}
 	if debug {
 		lines = append(lines,
 			"Current zoom: "+strconv.Itoa(int(math.Round(v.view.Zoom*100)))+"%",

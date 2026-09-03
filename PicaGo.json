@@ -4,5 +4,6 @@
   "showShadow": true,
   "slideshowIntervalSeconds": 1,
   "animateOnStart": true,
-  "showDebug": false
+  "showDebug": false,
+  "graphicsLibrary": "opengl"
 }

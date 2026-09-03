@@ -158,7 +158,9 @@ are ignored.
   "background": "desktop",
   "showShadow": true,
   "slideshowIntervalSeconds": 1,
-  "animateOnStart": true
+  "animateOnStart": true,
+  "showDebug": false,
+  "graphicsLibrary": "auto"
 }
 ```
 
@@ -170,6 +172,9 @@ are ignored.
 - `slideshowIntervalSeconds`: number of seconds between two slideshow images.
 - `animateOnStart`: animate the initial image fit when opening PicaGo.
 - `showDebug`: show the debug/help overlay at startup; `F1` toggles it afterward.
+- `graphicsLibrary`: graphics backend requested at startup: `auto`, `opengl` or
+  `directx`. The default `auto` uses the platform-preferred backend. The backend
+  actually selected is shown in the `F1` overlay.
 
 If the file is missing, PicaGo creates it with these default values.
 

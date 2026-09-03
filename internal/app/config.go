@@ -15,6 +15,7 @@ type config struct {
 	SlideshowIntervalSeconds int    `json:"slideshowIntervalSeconds"`
 	AnimateOnStart           bool   `json:"animateOnStart"`
 	ShowDebug                bool   `json:"showDebug"`
+	GraphicsLibrary          string `json:"graphicsLibrary"`
 }
 
 func defaultConfig() config {
@@ -25,6 +26,7 @@ func defaultConfig() config {
 		SlideshowIntervalSeconds: 1,
 		AnimateOnStart:           true,
 		ShowDebug:                false,
+		GraphicsLibrary:          "auto",
 	}
 }
 

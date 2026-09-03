@@ -112,6 +112,17 @@ func windowTitle(imageName string) string {
 	return title + " - " + imageName
 }
 
+func graphicsLibraryFromConfig(value string) ebiten.GraphicsLibrary {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "opengl":
+		return ebiten.GraphicsLibraryOpenGL
+	case "directx":
+		return ebiten.GraphicsLibraryDirectX
+	default:
+		return ebiten.GraphicsLibraryAuto
+	}
+}
+
 type Viewer struct {
 	imageA *imagedata.LoadedImage
 	imageB *imagedata.LoadedImage
@@ -252,7 +263,7 @@ type Viewer struct {
 func Run(args []string) error {
 	cfg := loadConfig()
 	initDebugLogging(cfg.ShowDebug)
-	debugf("startup: args=%d desktopBackground=%v background=%q", len(args), cfg.DesktopBackground, cfg.Background)
+	debugf("startup: args=%d desktopBackground=%v background=%q graphicsLibrary=%q", len(args), cfg.DesktopBackground, cfg.Background, cfg.GraphicsLibrary)
 	game := &Viewer{
 		mode:                displayModeSingleA,
 		windowWidth:         640,
@@ -307,7 +318,9 @@ func Run(args []string) error {
 		game.startAsyncImageFileLoad(args[0], asyncImageSlotA, true, cfg.AnimateOnStart)
 	}
 
-	err := ebiten.RunGame(game)
+	err := ebiten.RunGameWithOptions(game, &ebiten.RunGameOptions{
+		GraphicsLibrary: graphicsLibraryFromConfig(cfg.GraphicsLibrary),
+	})
 	game.rememberCurrentImageView()
 	_ = saveImageViewStates(game.imageViewStates)
 	game.savePreferences()
