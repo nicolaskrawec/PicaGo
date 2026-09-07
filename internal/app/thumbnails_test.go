@@ -88,6 +88,18 @@ func TestThumbnailSizeUsesHorizontalDistanceFromCenter(t *testing.T) {
 	}
 }
 
+func TestThumbnailRevealOffsetMovesUpAsOpacityIncreases(t *testing.T) {
+	if got := thumbnailRevealOffset(0); got != thumbnailRevealSlideDistance {
+		t.Fatalf("hidden thumbnail offset = %d, want %d", got, thumbnailRevealSlideDistance)
+	}
+	if got := thumbnailRevealOffset(0.5); got != thumbnailRevealSlideDistance/2 {
+		t.Fatalf("half-visible thumbnail offset = %d, want %d", got, thumbnailRevealSlideDistance/2)
+	}
+	if got := thumbnailRevealOffset(1); got != 0 {
+		t.Fatalf("visible thumbnail offset = %d, want 0", got)
+	}
+}
+
 func TestThumbnailRectsUseFormulaAndRemainSymmetric(t *testing.T) {
 	current := thumbnailRect(1000, 700, 0)
 	previousRight := current

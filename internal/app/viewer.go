@@ -101,6 +101,7 @@ const thumbnailCacheLimit = 64
 const thumbnailWorkerLimit = 2
 const thumbnailRevealDistance = 120
 const thumbnailLoadFadeDuration = 220 * time.Millisecond
+const thumbnailRevealSlideDistance = 32
 const navigationKeyRepeatDelay = 350 * time.Millisecond
 const navigationKeyRepeatInterval = 100 * time.Millisecond
 const zoomKeyRepeatDelay = 180 * time.Millisecond

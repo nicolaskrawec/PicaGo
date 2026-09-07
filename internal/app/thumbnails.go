@@ -496,7 +496,11 @@ func (v *Viewer) drawThumbnailItem(screen *ebiten.Image, item thumbnailItem, now
 		itemOpacity = 1
 	}
 	itemOpacity *= v.thumbnailOpacity * thumbnailLoadOpacity(entry, now)
-	drawThumbnailTexture(screen, entry.texture, item.rect, itemOpacity)
+	revealOffset := thumbnailRevealOffset(v.thumbnailOpacity)
+	drawRect := item.rect
+	drawRect.Min.Y += revealOffset
+	drawRect.Max.Y += revealOffset
+	drawThumbnailTexture(screen, entry.texture, drawRect, itemOpacity)
 }
 
 func thumbnailLoadOpacity(entry *thumbnailCacheEntry, now time.Time) float64 {
@@ -509,6 +513,13 @@ func thumbnailLoadOpacity(entry *thumbnailCacheEntry, now time.Time) float64 {
 	progress := clampFloat64(float64(now.Sub(entry.fadeStartedAt))/float64(thumbnailLoadFadeDuration), 0, 1)
 	// Smoothstep keeps both ends of the fade soft while remaining deterministic.
 	return progress * progress * (3 - 2*progress)
+}
+
+func thumbnailRevealOffset(opacity float64) int {
+	// thumbnailOpacity already follows an exponential ease-out curve. Reusing
+	// it for the position keeps the fade and upward movement synchronized.
+	progress := clampFloat64(opacity, 0, 1)
+	return int(math.Round(float64(thumbnailRevealSlideDistance) * (1 - progress)))
 }
 
 func (v *Viewer) thumbnailLoadFadeActive(now time.Time) bool {
