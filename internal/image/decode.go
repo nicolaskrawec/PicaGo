@@ -2,6 +2,7 @@ package image
 
 import (
 	"bytes"
+	"fmt"
 	stddraw "image"
 	_ "image/gif"
 	stdjpeg "image/jpeg"
@@ -19,6 +20,11 @@ import (
 	"github.com/gen2brain/jpegn"
 	"github.com/hajimehoshi/ebiten/v2"
 	xdraw "golang.org/x/image/draw"
+)
+
+const (
+	maxImageFileBytes = 100 * 1024 * 1024
+	maxImagePixels    = int64(100_000_000)
 )
 
 type LoadedImage struct {
@@ -64,6 +70,9 @@ func LoadFile(path string) (*LoadedImage, error) {
 }
 
 func DecodeFile(path string) (*DecodedImage, error) {
+	if err := validateImageFile(path); err != nil {
+		return nil, err
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -74,6 +83,9 @@ func DecodeFile(path string) (*DecodedImage, error) {
 }
 
 func DecodeFileForDisplay(path string, maxDimension int) (*DecodedImage, error) {
+	if err := validateImageFile(path); err != nil {
+		return nil, err
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -86,6 +98,9 @@ func DecodeFileForDisplay(path string, maxDimension int) (*DecodedImage, error) 
 // image. The full-size decode is released before returning so thumbnail caches
 // never keep the original pixels alive.
 func DecodeFileThumbnail(path string, maxDimension int) (stddraw.Image, error) {
+	if err := validateImageFile(path); err != nil {
+		return nil, err
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -114,6 +129,9 @@ func LoadFS(fsys fs.FS, path string) (*LoadedImage, error) {
 }
 
 func DecodeFS(fsys fs.FS, path string) (*DecodedImage, error) {
+	if err := validateImageFS(fsys, path); err != nil {
+		return nil, err
+	}
 	file, err := fsys.Open(path)
 	if err != nil {
 		return nil, err
@@ -124,6 +142,9 @@ func DecodeFS(fsys fs.FS, path string) (*DecodedImage, error) {
 }
 
 func DecodeFSForDisplay(fsys fs.FS, path string, maxDimension int) (*DecodedImage, error) {
+	if err := validateImageFS(fsys, path); err != nil {
+		return nil, err
+	}
 	file, err := fsys.Open(path)
 	if err != nil {
 		return nil, err
@@ -141,7 +162,56 @@ func LoadBytes(data []byte, fileName, filePath string) (*LoadedImage, error) {
 }
 
 func DecodeBytes(data []byte, fileName, filePath string) (*DecodedImage, error) {
+	if len(data) > maxImageFileBytes {
+		return nil, fmt.Errorf("image file too large")
+	}
+	if err := validateImageConfig(bytes.NewReader(data)); err != nil {
+		return nil, err
+	}
 	return decodeFromReader(bytes.NewReader(data), fileName, filePath, 0)
+}
+
+func validateImageFile(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.Size() > maxImageFileBytes {
+		return fmt.Errorf("image file too large")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return validateImageConfig(file)
+}
+
+func validateImageFS(fsys fs.FS, path string) error {
+	info, err := fs.Stat(fsys, path)
+	if err != nil {
+		return err
+	}
+	if info.Size() > maxImageFileBytes {
+		return fmt.Errorf("image file too large")
+	}
+	file, err := fsys.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return validateImageConfig(file)
+}
+
+func validateImageConfig(reader io.Reader) error {
+	config, _, err := stddraw.DecodeConfig(reader)
+	if err != nil {
+		return err
+	}
+	if config.Width <= 0 || config.Height <= 0 || int64(config.Width) > maxImagePixels/int64(config.Height) {
+		return fmt.Errorf("image has too many pixels")
+	}
+	return nil
 }
 
 func decodeFromReader(reader io.Reader, fileName, filePath string, maxDimension int) (*DecodedImage, error) {
