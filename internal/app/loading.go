@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"io/fs"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -396,7 +397,13 @@ func imageViewStateKey(path string) string {
 	if err == nil {
 		path = absolutePath
 	}
-	path = strings.ToLower(filepath.Clean(path))
+	path = filepath.Clean(path)
+	// Windows paths are case-insensitive. On Unix-like systems, changing the
+	// case would make distinct files such as Photo.jpg and photo.jpg share the
+	// same persisted view state.
+	if runtime.GOOS == "windows" {
+		path = strings.ToLower(path)
+	}
 	path = strings.ReplaceAll(path, "\\", "/")
 	hash := fnv.New64a()
 	_, _ = hash.Write([]byte(path))
