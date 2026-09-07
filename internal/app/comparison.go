@@ -236,6 +236,13 @@ func (v *Viewer) setDragMode(mouseX, mouseY int, imageRect stdimage.Rectangle) {
 	v.draggingSlider = false
 }
 
+func (v *Viewer) isSplitSliderClick(mouseX, mouseY int, imageRect stdimage.Rectangle) bool {
+	if imageRect.Empty() || !v.sliderNearCursor(mouseX, mouseY, imageRect) {
+		return false
+	}
+	return pointInRect(mouseX, mouseY, imageRect) || v.canStartSliderDragFromOutside(mouseX, mouseY, imageRect)
+}
+
 func (v *Viewer) updateSliderPosition(mouseX, mouseY int) {
 	minPosition, maxPosition := v.sliderDragBounds()
 	if v.slider.Orientation == compare.OrientationHorizontal {

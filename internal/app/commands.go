@@ -194,18 +194,27 @@ func (v *Viewer) Update() error {
 			v.leftMouseDown = true
 			return nil
 		}
-		if path, ok := v.thumbnailPathAt(mouseX, mouseY); ok {
-			if v.imageA == nil || path != v.imageA.FilePath {
-				v.loadNavigationImage(path)
-			}
-			v.leftMouseDown = true
-			return nil
+		// The bottom of the split can overlap the thumbnail strip. Give a
+		// click near the split line priority so the line remains draggable.
+		splitSliderClick := false
+		if v.mode == displayModeCompare && v.compareMask == compareMaskSplit &&
+			v.imageA != nil && v.imageB != nil && !v.pendingResetFit && v.view.Zoom > 0 {
+			splitSliderClick = v.isSplitSliderClick(mouseX, mouseY, v.currentImageRect())
 		}
-		// The gaps belong to the thumbnail strip too. Consume the click so it
-		// cannot fall through to the legacy bottom-bar navigation underneath.
-		if v.pointInThumbnailStrip(mouseX, mouseY) {
-			v.leftMouseDown = true
-			return nil
+		if !splitSliderClick {
+			if path, ok := v.thumbnailPathAt(mouseX, mouseY); ok {
+				if v.imageA == nil || path != v.imageA.FilePath {
+					v.loadNavigationImage(path)
+				}
+				v.leftMouseDown = true
+				return nil
+			}
+			// The gaps belong to the thumbnail strip too. Consume the click so it
+			// cannot fall through to the legacy bottom-bar navigation underneath.
+			if v.pointInThumbnailStrip(mouseX, mouseY) {
+				v.leftMouseDown = true
+				return nil
+			}
 		}
 		if pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance) {
 			return ebiten.Termination
