@@ -257,6 +257,18 @@ func TestThumbnailsShowOnlyNearBottomWhileCursorIsActive(t *testing.T) {
 	if v.shouldShowThumbnails(now.Add(cursorIdleDelay), 500, 699) {
 		t.Fatal("idle cursor kept thumbnails visible")
 	}
+
+	v.draggingSlider = true
+	if v.shouldShowThumbnails(now, 500, 699) {
+		t.Fatal("slider drag revealed thumbnails")
+	}
+
+	v.draggingSlider = false
+	v.mode = displayModeCompare
+	v.compareMask = compareMaskCircle
+	if v.shouldShowThumbnails(now, 500, 699) {
+		t.Fatal("circle comparison revealed thumbnails")
+	}
 }
 
 func TestThumbnailVisibilityFadesInAndOut(t *testing.T) {

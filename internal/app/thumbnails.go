@@ -463,7 +463,10 @@ func (v *Viewer) clearThumbnailCache() {
 }
 
 func (v *Viewer) drawThumbnailStrip(screen *ebiten.Image) {
-	if v.thumbnailOpacity <= 0.01 {
+	// The split line is dragged through the bottom reveal area as well. Keep
+	// the strip hidden for the whole slider interaction, including the frame
+	// in which the drag starts.
+	if v.thumbnailsDisabled() || v.thumbnailOpacity <= 0.01 {
 		return
 	}
 	now := time.Now()
@@ -621,7 +624,12 @@ func (v *Viewer) updateThumbnailVisibility(now time.Time, mouseX, mouseY int) {
 
 func (v *Viewer) shouldShowThumbnails(now time.Time, mouseX, mouseY int) bool {
 	return v.imageA != nil &&
+		!v.thumbnailsDisabled() &&
 		mouseX >= 0 && mouseX < v.windowWidth &&
 		mouseY >= maxInt(0, v.windowHeight-thumbnailRevealDistance) && mouseY < v.windowHeight &&
 		!v.cursorIdle(now)
+}
+
+func (v *Viewer) thumbnailsDisabled() bool {
+	return v.draggingSlider || (v.mode == displayModeCompare && v.compareMask == compareMaskCircle)
 }
