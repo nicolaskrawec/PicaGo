@@ -1,0 +1,10 @@
+Package: picago
+Version: @VERSION@
+Section: graphics
+Priority: optional
+Architecture: amd64
+Maintainer: NkSoft
+Depends: libc6, libgl1, libasound2, libxcursor1, libxi6, libxinerama1, libxrandr2, libxxf86vm1
+Description: Lightweight image viewer and comparison tool
+ PicaGo supports common image formats, image navigation, metadata display,
+ slideshows, and several visual comparison modes.

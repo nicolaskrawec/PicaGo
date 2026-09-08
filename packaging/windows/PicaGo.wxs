@@ -1,0 +1,36 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="PicaGo"
+    Manufacturer="NkSoft"
+    Version="$(Version)"
+    UpgradeCode="A4F49531-20B5-4DFD-8D7F-45F7466EFA90"
+    Scope="perMachine"
+    InstallerVersion="500">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of PicaGo is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="PicaGoIcon" SourceFile="$(IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="PicaGoIcon" />
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="PicaGo">
+        <Component Id="PicaGoFiles" Guid="*">
+          <File Id="PicaGoExecutable" Source="$(SourceDir)\PicaGo.exe" KeyPath="yes">
+            <Shortcut
+              Id="PicaGoStartMenuShortcut"
+              Directory="ProgramMenuFolder"
+              Name="PicaGo"
+              WorkingDirectory="INSTALLFOLDER"
+              Advertise="yes" />
+          </File>
+          <File Id="PicaGoDefaultConfig" Source="$(SourceDir)\PicaGo.json" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="PicaGoFeature" Title="PicaGo" Level="1">
+      <ComponentRef Id="PicaGoFiles" />
+    </Feature>
+  </Package>
+</Wix>

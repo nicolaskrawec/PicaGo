@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PicaGo
+Comment=View and compare images
+Exec=picago %F
+Icon=picago
+Terminal=false
+Categories=Graphics;Viewer;
+MimeType=image/jpeg;image/png;image/gif;image/webp;image/bmp;image/tiff;

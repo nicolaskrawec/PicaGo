@@ -20,6 +20,10 @@
   #define InstallerOutputDir AddBackslash(SourcePath) + "..\\..\\dist\\installer"
 #endif
 
+#ifndef SetupIconFile
+  #define SetupIconFile AddBackslash(SourcePath) + "..\\..\\icon.ico"
+#endif
+
 [Setup]
 AppId={{A4F49531-20B5-4DFD-8D7F-45F7466EFA90}
 AppName={#MyAppName}
@@ -29,7 +33,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
-SetupIconFile={#BuildDir}\..\icon.ico
+SetupIconFile={#SetupIconFile}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

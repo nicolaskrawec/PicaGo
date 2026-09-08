@@ -345,6 +345,27 @@ Notes about default file opening on Windows 10/11:
 - the installer registers PicaGo properly for supported extensions
 - Windows may still require a user confirmation in `Default apps`
 - the installer includes an optional checkbox to open the Windows default apps settings at the end
+
+## Automated Releases
+
+Pushing a semantic version tag triggers `.github/workflows/release.yml`:
+
+```bash
+git tag -a v1.3.0 -m "PicaGo 1.3.0"
+git push origin v1.3.0
+```
+
+After the tests pass, GitHub Actions builds and attaches these files to the
+corresponding GitHub Release:
+
+- a Windows x64 portable executable, Setup executable and MSI installer
+- a Linux x64 Debian package
+- macOS DMG images for Intel and Apple Silicon
+
+The workflow rejects non-semantic tags. The generated packages are currently
+unsigned. Windows code signing and Apple Developer signing/notarization require
+their respective certificates to be configured as GitHub repository secrets.
+
 ## Technical Notes
 
 PicaGo is written in Go and uses

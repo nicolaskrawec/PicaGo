@@ -77,6 +77,7 @@ $iscc = Get-InnoSetupCompiler
     "/DAppVersion=$resolvedVersion" `
     "/DAppNumericVersion=$windowsVersion" `
     "/DBuildDir=$outputDirAbsolute" `
+    "/DSetupIconFile=$(Join-Path $projectRoot 'icon.ico')" `
     "/DInstallerOutputDir=$installerOutputAbsolute" `
     $installerScript
 
