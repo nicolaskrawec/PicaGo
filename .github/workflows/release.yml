@@ -65,10 +65,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes \
             gcc libc6-dev libgl1-mesa-dev libxcursor-dev libxi-dev \
-            libxinerama-dev libxrandr-dev libxxf86vm-dev libasound2-dev pkg-config
+            libxinerama-dev libxrandr-dev libxxf86vm-dev libasound2-dev \
+            pkg-config xvfb xauth
 
-      - name: Run tests
-        run: go test ./...
+      - name: Run tests in a virtual display
+        run: xvfb-run --auto-servernum go test ./...
 
   windows:
     name: Windows x64
