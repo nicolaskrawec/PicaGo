@@ -14,18 +14,18 @@ func (v *Viewer) toggleSlideshow(now time.Time) {
 	if v.slideshowPlaying {
 		v.slideshowPlaying = false
 		v.nextSlideshowAt = time.Time{}
-		v.showCenterInfo("%s", "Diaporama : pause")
+		v.showCenterInfo("notification.slideshow_paused")
 		return
 	}
 
 	images, _, err := v.navigationImagePathsForSlideshow()
 	if err != nil || len(images) < 2 {
-		v.showCenterInfo("%s", "Diaporama indisponible")
+		v.showCenterInfo("notification.slideshow_unavailable")
 		return
 	}
 	v.slideshowPlaying = true
 	v.nextSlideshowAt = now.Add(v.slideshowInterval())
-	v.showCenterInfo("Diaporama : lecture (%d s)", int(v.slideshowInterval()/time.Second))
+	v.showCenterInfo("notification.slideshow_playing", int(v.slideshowInterval()/time.Second))
 }
 
 func (v *Viewer) updateSlideshow(now time.Time) {

@@ -8,7 +8,9 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestDecodeJPEGAppliesEXIFOrientation(t *testing.T) {
@@ -29,6 +31,9 @@ func TestDecodeJPEGAppliesEXIFOrientation(t *testing.T) {
 	if decoded.Width != 3 || decoded.Height != 2 {
 		t.Fatalf("oriented metadata dimensions = %dx%d, want 3x2", decoded.Width, decoded.Height)
 	}
+	if len(decoded.EXIF) != 1 || decoded.EXIF[0].Name != "Orientation" || decoded.EXIF[0].Value != "6" {
+		t.Fatalf("EXIF = %#v, want Orientation: 6", decoded.EXIF)
+	}
 
 	preview, err := decodePreviewFromReader(bytes.NewReader(data), "oriented.jpg", "oriented.jpg", 100)
 	if err != nil {
@@ -36,6 +41,37 @@ func TestDecodeJPEGAppliesEXIFOrientation(t *testing.T) {
 	}
 	if got := preview.Preview.Bounds().Size(); got.X != 3 || got.Y != 2 {
 		t.Fatalf("oriented preview size = %v, want (3,2)", got)
+	}
+}
+
+func TestEXIFImageFormat(t *testing.T) {
+	tests := []struct {
+		name string
+		ok   bool
+	}{
+		{"photo.JPG", true},
+		{"photo.jpeg", true},
+		{"photo.png", true},
+		{"photo.webp", true},
+		{"photo.tiff", true},
+		{"photo.gif", false},
+		{"photo.bmp", false},
+	}
+	for _, test := range tests {
+		if _, got := exifImageFormat(test.name); got != test.ok {
+			t.Errorf("exifImageFormat(%q) supported = %v, want %v", test.name, got, test.ok)
+		}
+	}
+}
+
+func TestEXIFValueTextNormalizesAndBoundsValues(t *testing.T) {
+	if got := exifValueText("line 1\n\tline 2"); got != "line 1 line 2" {
+		t.Fatalf("normalized value = %q", got)
+	}
+	long := strings.Repeat("é", maxEXIFValueRunes+10)
+	got := exifValueText(long)
+	if utf8.RuneCountInString(got) != maxEXIFValueRunes || !strings.HasSuffix(got, "…") {
+		t.Fatalf("bounded value has %d runes", utf8.RuneCountInString(got))
 	}
 }
 

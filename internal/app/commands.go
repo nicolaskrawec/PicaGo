@@ -104,7 +104,7 @@ func (v *Viewer) Update() error {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyR) {
 		v.resetViewParameters()
-		v.showCenterInfo("%s", "Vue réinitialisée")
+		v.showCenterInfo("notification.view_reset")
 	}
 	// On AZERTY, the physical key labelled Z can be reported as KeyW by
 	// Ebiten/GLFW (the key constants follow the US layout).
@@ -128,6 +128,15 @@ func (v *Viewer) Update() error {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
 		v.showHelp = !v.showHelp
+		if v.showHelp {
+			v.showEXIF = false
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyF2) {
+		v.showEXIF = !v.showEXIF
+		if v.showEXIF {
+			v.showHelp = false
+		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyH) {
 		v.setCompareOrientation(compare.OrientationHorizontal)

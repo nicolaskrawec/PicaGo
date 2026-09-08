@@ -2,7 +2,7 @@ package image
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	stddraw "image"
 	_ "image/gif"
 	stdjpeg "image/jpeg"
@@ -27,6 +27,11 @@ const (
 	maxImagePixels    = int64(100_000_000)
 )
 
+var (
+	ErrFileTooLarge  = errors.New("image file too large")
+	ErrTooManyPixels = errors.New("image has too many pixels")
+)
+
 type LoadedImage struct {
 	FileName        string
 	FilePath        string
@@ -34,6 +39,7 @@ type LoadedImage struct {
 	Width           int
 	Height          int
 	HasTransparency bool
+	EXIF            []EXIFTag
 	GPUTexture      *ebiten.Image
 }
 
@@ -44,6 +50,7 @@ type DecodedImage struct {
 	Width           int
 	Height          int
 	HasTransparency bool
+	EXIF            []EXIFTag
 	Image           stddraw.Image
 	// Preview is deliberately kept separate from Image: it can be uploaded to
 	// the GPU quickly while the full-resolution texture is deferred.
@@ -163,7 +170,7 @@ func LoadBytes(data []byte, fileName, filePath string) (*LoadedImage, error) {
 
 func DecodeBytes(data []byte, fileName, filePath string) (*DecodedImage, error) {
 	if len(data) > maxImageFileBytes {
-		return nil, fmt.Errorf("image file too large")
+		return nil, ErrFileTooLarge
 	}
 	if err := validateImageConfig(bytes.NewReader(data)); err != nil {
 		return nil, err
@@ -177,7 +184,7 @@ func validateImageFile(path string) error {
 		return err
 	}
 	if info.Size() > maxImageFileBytes {
-		return fmt.Errorf("image file too large")
+		return ErrFileTooLarge
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -193,7 +200,7 @@ func validateImageFS(fsys fs.FS, path string) error {
 		return err
 	}
 	if info.Size() > maxImageFileBytes {
-		return fmt.Errorf("image file too large")
+		return ErrFileTooLarge
 	}
 	file, err := fsys.Open(path)
 	if err != nil {
@@ -209,14 +216,22 @@ func validateImageConfig(reader io.Reader) error {
 		return err
 	}
 	if config.Width <= 0 || config.Height <= 0 || int64(config.Width) > maxImagePixels/int64(config.Height) {
-		return fmt.Errorf("image has too many pixels")
+		return ErrTooManyPixels
 	}
 	return nil
 }
 
 func decodeFromReader(reader io.Reader, fileName, filePath string, maxDimension int) (*DecodedImage, error) {
+	var exif []EXIFTag
+	if seeker, ok := reader.(io.ReadSeeker); ok {
+		exif = readEXIF(seeker, fileName)
+	}
 	if isJPEGFile(fileName) {
-		return decodeJPEG(reader, fileName, filePath, maxDimension)
+		decoded, err := decodeJPEG(reader, fileName, filePath, maxDimension)
+		if decoded != nil {
+			decoded.EXIF = exif
+		}
+		return decoded, err
 	}
 
 	decoded, _, err := stddraw.Decode(reader)
@@ -234,6 +249,7 @@ func decodeFromReader(reader io.Reader, fileName, filePath string, maxDimension 
 		// Alpha detection requires a full pixel-by-pixel pass. Keep it disabled
 		// so decoding large images does not trigger a second full image scan.
 		HasTransparency: false,
+		EXIF:            exif,
 		Image:           decoded,
 	}
 	if maxDimension > 0 {
@@ -396,6 +412,7 @@ func NewLoadedImage(decoded *DecodedImage) *LoadedImage {
 		Width:           decoded.Width,
 		Height:          decoded.Height,
 		HasTransparency: decoded.HasTransparency,
+		EXIF:            decoded.EXIF,
 		GPUTexture:      ebiten.NewImageFromImage(decoded.Image),
 	}
 }
@@ -413,6 +430,7 @@ func NewLoadedPreviewImage(decoded *DecodedImage) *LoadedImage {
 		DecodeMethod: decoded.DecodeMethod,
 		Width:        decoded.Width, Height: decoded.Height,
 		HasTransparency: decoded.HasTransparency,
+		EXIF:            decoded.EXIF,
 		GPUTexture:      ebiten.NewImageFromImage(textureSource),
 	}
 }
@@ -472,6 +490,7 @@ func NewLoadedPreviewCopy(source *LoadedImage, maxDimension int) *LoadedImage {
 		Width:           source.Width,
 		Height:          source.Height,
 		HasTransparency: source.HasTransparency,
+		EXIF:            source.EXIF,
 		GPUTexture:      texture,
 	}
 }

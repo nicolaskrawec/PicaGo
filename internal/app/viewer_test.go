@@ -31,6 +31,15 @@ func TestCursorBecomesIdleAfterDelay(t *testing.T) {
 	}
 }
 
+func TestTruncateOverlayLineUsesRuneLength(t *testing.T) {
+	if got := truncateOverlayLine("éééé", 3); got != "éé…" {
+		t.Fatalf("truncateOverlayLine = %q, want %q", got, "éé…")
+	}
+	if got := truncateOverlayLine("short", 10); got != "short" {
+		t.Fatalf("short line changed to %q", got)
+	}
+}
+
 func TestFullscreenDoubleClickToggles100AndPreviousZoom(t *testing.T) {
 	previous := render.View{Zoom: 2, OffsetX: 45, OffsetY: -30, Gamma: 1.4, Contrast: 1.2}
 	v := Viewer{

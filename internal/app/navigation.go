@@ -64,37 +64,20 @@ func imageSortModeFromConfig(value string) imageSortMode {
 	}
 }
 
-func (mode imageSortMode) label() string {
+func (mode imageSortMode) translationKey() string {
 	switch mode {
 	case imageSortByNameDescending:
-		return "name descending"
+		return "sort.name_descending"
 	case imageSortByModificationDateAscending:
-		return "modification date ascending"
+		return "sort.modification_date_ascending"
 	case imageSortByModificationDateDescending:
-		return "modification date descending"
+		return "sort.modification_date_descending"
 	case imageSortByCreationDateAscending:
-		return "creation date ascending"
+		return "sort.creation_date_ascending"
 	case imageSortByCreationDateDescending:
-		return "creation date descending"
+		return "sort.creation_date_descending"
 	default:
-		return "name ascending"
-	}
-}
-
-func (mode imageSortMode) notificationLabel() string {
-	switch mode {
-	case imageSortByNameDescending:
-		return "nom decroissant"
-	case imageSortByModificationDateAscending:
-		return "modification croissante"
-	case imageSortByModificationDateDescending:
-		return "modification decroissante"
-	case imageSortByCreationDateAscending:
-		return "creation croissante"
-	case imageSortByCreationDateDescending:
-		return "creation decroissante"
-	default:
-		return "nom croissant"
+		return "sort.name_ascending"
 	}
 }
 
@@ -151,7 +134,7 @@ func (v *Viewer) cycleImageSort() {
 	v.navigationImages = nil
 	v.stopThumbnailAnimation()
 	v.prefetchAdjacentImages()
-	v.showCenterInfo("Tri : %s", mode.notificationLabel())
+	v.showCenterInfo("notification.sort", v.text(mode.translationKey()))
 }
 
 func (v *Viewer) loadAdjacentImage(step int) error {

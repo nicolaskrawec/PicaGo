@@ -1,12 +1,12 @@
 package app
 
 import (
-	"fmt"
 	"image/color"
 	"math"
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -14,6 +14,7 @@ import (
 
 	"viewergo/internal/assets"
 	"viewergo/internal/compare"
+	"viewergo/internal/i18n"
 	imagedata "viewergo/internal/image"
 	"viewergo/internal/render"
 )
@@ -167,6 +168,7 @@ type Viewer struct {
 	circleBorderOpacity   float64
 	showShadow            bool
 	showHelp              bool
+	showEXIF              bool
 	compareMask           compareMaskMode
 	circleMaskDiameter    float64
 	lastCompareBorderAt   time.Time
@@ -268,6 +270,7 @@ type Viewer struct {
 	desktopBackground bool
 	background        backgroundMode
 	preferences       config
+	localizer         i18n.Localizer
 	debugMode         bool
 	centerInfoText    string
 	centerInfoUntil   time.Time
@@ -292,6 +295,7 @@ func Run(args []string) error {
 		debugMode:           cfg.ShowDebug,
 		background:          backgroundModeFromConfig(cfg.Background),
 		preferences:         cfg,
+		localizer:           i18n.New(cfg.Language),
 		// A session started without an image can receive one later via drag and
 		// drop. Do not capture the desktop in that case: the native capture path
 		// is not safe during the subsequent fullscreen transition.
@@ -318,6 +322,7 @@ func Run(args []string) error {
 		imageViewStates:   loadImageViewStates(),
 		sessionImageViews: make(map[string]sessionImageView),
 	}
+	game.preferences.Language = game.localizer.Language()
 
 	ebiten.SetWindowResizable(true)
 	ebiten.SetTPS(ebiten.SyncWithFPS)
@@ -328,7 +333,7 @@ func Run(args []string) error {
 	if len(args) > 0 {
 		game.windowWidth = 1280
 		game.windowHeight = 720
-		ebiten.SetWindowTitle(windowTitle(filepath.Base(args[0]) + " loading..."))
+		ebiten.SetWindowTitle(windowTitle(game.localizer.Format("status.loading", filepath.Base(args[0]))))
 		ebiten.SetWindowSize(1280, 720)
 		game.pendingInitialBorderless = true
 		game.startAsyncImageFileLoad(args[0], asyncImageSlotA, true, cfg.AnimateOnStart)
@@ -457,21 +462,32 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	if v.showHelp {
 		v.drawHelpOverlay(screen)
 	}
+	if v.showEXIF {
+		v.drawEXIFOverlay(screen)
+	}
 	v.drawCenterInfo(screen)
 	if v.loadingImageName != "" {
-		ebitenutil.DebugPrintAt(screen, "Loading "+v.loadingImageName, 10, v.windowHeight-22)
+		ebitenutil.DebugPrintAt(screen, v.message("status.loading", v.loadingImageName), 10, v.windowHeight-22)
 	} else if v.loadError != "" {
-		ebitenutil.DebugPrintAt(screen, "Load failed: "+v.loadError, 10, v.windowHeight-22)
+		ebitenutil.DebugPrintAt(screen, v.message("error.load_failed", v.loadError), 10, v.windowHeight-22)
 	}
 }
 
-func (v *Viewer) showCenterInfo(format string, value any) {
-	v.centerInfoText = fmt.Sprintf(format, value)
+func (v *Viewer) text(key string) string {
+	return v.localizer.Text(key)
+}
+
+func (v *Viewer) message(key string, args ...any) string {
+	return v.localizer.Format(key, args...)
+}
+
+func (v *Viewer) showCenterInfo(key string, args ...any) {
+	v.centerInfoText = v.message(key, args...)
 	v.centerInfoUntil = time.Now().Add(900 * time.Millisecond)
 	if v.centerInfoTexture != nil {
 		v.centerInfoTexture.Deallocate()
 	}
-	textWidth := maxInt(1, len(v.centerInfoText)*6)
+	textWidth := maxInt(1, utf8.RuneCountInString(v.centerInfoText)*6)
 	boxWidth := textWidth + 20
 	boxHeight := 24
 	v.centerInfoTexture = ebiten.NewImage(boxWidth, boxHeight)
@@ -490,7 +506,7 @@ func (v *Viewer) drawCenterInfo(screen *ebiten.Image) {
 
 	const textHeight = 12
 	const fadeDuration = 250 * time.Millisecond
-	textWidth := len(v.centerInfoText) * 6
+	textWidth := utf8.RuneCountInString(v.centerInfoText) * 6
 	boxWidth := float32(textWidth + 20)
 	boxHeight := float32(textHeight + 12)
 	left := float32(screen.Bounds().Dx()-int(boxWidth)) / 2
@@ -513,7 +529,7 @@ func (v *Viewer) drawHelpOverlay(screen *ebiten.Image) {
 	lines := strings.Split(text, "\n")
 	maxLineWidth := 0
 	for _, line := range lines {
-		maxLineWidth = maxInt(maxLineWidth, len(line)*6)
+		maxLineWidth = maxInt(maxLineWidth, utf8.RuneCountInString(line)*6)
 	}
 
 	const paddingX = 10
@@ -532,6 +548,54 @@ func (v *Viewer) drawHelpOverlay(screen *ebiten.Image) {
 	borderOptions.ColorScale.ScaleWithColor(color.NRGBA{220, 220, 220, 190})
 	vector.StrokePath(screen, path, &vector.StrokeOptions{Width: 1.5}, borderOptions)
 	ebitenutil.DebugPrintAt(screen, text, int(left)+paddingX, int(top)+paddingY)
+}
+
+func (v *Viewer) drawEXIFOverlay(screen *ebiten.Image) {
+	text := v.exifText()
+	lines := strings.Split(text, "\n")
+	maxVisibleLines := maxInt(1, (screen.Bounds().Dy()-28)/16)
+	if len(lines) > maxVisibleLines {
+		hidden := len(lines) - maxVisibleLines + 1
+		lines = append(lines[:maxVisibleLines-1], v.message("exif.more", hidden))
+	}
+	maxLineRunes := maxInt(8, (screen.Bounds().Dx()-32)/6)
+	for i, line := range lines {
+		lines[i] = truncateOverlayLine(line, maxLineRunes)
+	}
+	text = strings.Join(lines, "\n")
+
+	maxLineWidth := 0
+	for _, line := range lines {
+		maxLineWidth = maxInt(maxLineWidth, utf8.RuneCountInString(line)*6)
+	}
+
+	const paddingX = 10
+	const paddingY = 8
+	const lineHeight = 16
+	boxWidth := float32(maxLineWidth + paddingX*2)
+	boxHeight := float32(len(lines)*lineHeight + paddingY*2)
+	left, top := float32(6), float32(6)
+	path := roundedRectPath(left, top, boxWidth, boxHeight, 8)
+
+	fillOptions := &vector.DrawPathOptions{AntiAlias: true}
+	fillOptions.ColorScale.ScaleWithColor(color.NRGBA{48, 48, 48, 210})
+	vector.FillPath(screen, path, &vector.FillOptions{}, fillOptions)
+
+	borderOptions := &vector.DrawPathOptions{AntiAlias: true}
+	borderOptions.ColorScale.ScaleWithColor(color.NRGBA{220, 220, 220, 190})
+	vector.StrokePath(screen, path, &vector.StrokeOptions{Width: 1.5}, borderOptions)
+	ebitenutil.DebugPrintAt(screen, text, int(left)+paddingX, int(top)+paddingY)
+}
+
+func truncateOverlayLine(line string, maxRunes int) string {
+	if maxRunes < 1 || utf8.RuneCountInString(line) <= maxRunes {
+		return line
+	}
+	if maxRunes == 1 {
+		return "…"
+	}
+	runes := []rune(line)
+	return string(runes[:maxRunes-1]) + "…"
 }
 
 func roundedRectPath(left, top, width, height, radius float32) *vector.Path {

@@ -20,7 +20,7 @@ func (v *Viewer) adjustGamma(wheelDelta float64) {
 	v.view.Gamma = gamma
 	v.targetView.Gamma = gamma
 	v.rememberCurrentImageView()
-	v.showCenterInfo("Gamma %.2f", gamma)
+	v.showCenterInfo("notification.gamma", gamma)
 }
 
 func (v *Viewer) adjustExposure(wheelDelta float64) {
@@ -28,7 +28,7 @@ func (v *Viewer) adjustExposure(wheelDelta float64) {
 	v.view.Exposure = exposure
 	v.targetView.Exposure = exposure
 	v.rememberCurrentImageView()
-	v.showCenterInfo("Exposure %+.1f", exposure)
+	v.showCenterInfo("notification.exposure", exposure)
 }
 
 func (v *Viewer) adjustContrast(wheelDelta float64) {
@@ -40,5 +40,5 @@ func (v *Viewer) adjustContrast(wheelDelta float64) {
 	v.view.Contrast = contrast
 	v.targetView.Contrast = contrast
 	v.rememberCurrentImageView()
-	v.showCenterInfo("Contrast %.1f", contrast)
+	v.showCenterInfo("notification.contrast", contrast)
 }

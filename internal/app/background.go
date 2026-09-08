@@ -31,7 +31,7 @@ func (v *Viewer) toggleBackground() {
 		}
 	}
 	v.savePreferences()
-	v.showCenterInfo("Fond : %s", v.backgroundName())
+	v.showCenterInfo("notification.background", v.backgroundName())
 }
 
 func backgroundModeFromConfig(value string) backgroundMode {
@@ -64,14 +64,14 @@ func (v *Viewer) savePreferences() {
 
 func (v *Viewer) backgroundName() string {
 	if v.usesDesktopBackground() {
-		return "bureau"
+		return v.text("background.desktop")
 	}
 	switch v.background {
 	case backgroundBlack:
-		return "noir"
+		return v.text("background.black")
 	case backgroundWhite:
-		return "blanc"
+		return v.text("background.white")
 	default:
-		return "gris"
+		return v.text("background.gray")
 	}
 }

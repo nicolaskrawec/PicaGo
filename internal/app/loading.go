@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io/fs"
@@ -25,7 +26,7 @@ func (v *Viewer) startAsyncImageFileLoad(path string, slot asyncImageSlot, reset
 	v.trackPendingImageLoad(slot, id)
 	v.loadingImageName = filepath.Base(path)
 	v.loadError = ""
-	ebiten.SetWindowTitle(windowTitle(v.loadingImageName + " loading..."))
+	ebiten.SetWindowTitle(windowTitle(v.message("status.loading", v.loadingImageName)))
 	maxDimension := v.previewDimension()
 
 	go func() {
@@ -55,7 +56,7 @@ func (v *Viewer) startAsyncImageFSLoad(fsys fs.FS, path string, slot asyncImageS
 	v.trackPendingImageLoad(slot, id)
 	v.loadingImageName = filepath.Base(path)
 	v.loadError = ""
-	ebiten.SetWindowTitle(windowTitle(v.loadingImageName + " loading..."))
+	ebiten.SetWindowTitle(windowTitle(v.message("status.loading", v.loadingImageName)))
 	maxDimension := v.previewDimension()
 
 	go func() {
@@ -192,8 +193,8 @@ func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 
 	if result.err != nil {
 		result.decoded.Release()
-		v.loadError = result.err.Error()
-		ebiten.SetWindowTitle(windowTitle("load failed"))
+		v.loadError = v.localizedImageError(result.err)
+		ebiten.SetWindowTitle(windowTitle(v.text("status.load_failed")))
 		return
 	}
 
@@ -204,12 +205,27 @@ func (v *Viewer) applyDecodedImage(slot asyncImageSlot, decoded *imagedata.Decod
 	loaded := imagedata.NewLoadedPreviewImage(decoded)
 	if loaded == nil {
 		decoded.Release()
-		v.loadError = "image load failed"
-		ebiten.SetWindowTitle(windowTitle("load failed"))
+		v.loadError = v.text("error.image_load_failed")
+		ebiten.SetWindowTitle(windowTitle(v.text("status.load_failed")))
 		return
 	}
 	decoded.Release()
 	v.applyLoadedImage(slot, loaded, resetView, animateFit, activateFit, loadFull)
+}
+
+func (v *Viewer) localizedImageError(err error) string {
+	switch {
+	case errors.Is(err, imagedata.ErrFileTooLarge):
+		return v.text("error.image_file_too_large")
+	case errors.Is(err, imagedata.ErrTooManyPixels):
+		return v.text("error.image_too_many_pixels")
+	default:
+		// Decoder and operating-system errors are dynamic and not suitable as
+		// translation keys. Keep the detail in the debug log and show a stable,
+		// localizable message in the UI.
+		debugf("image load failed: %v", err)
+		return v.text("error.image_load_failed")
+	}
 }
 
 func (v *Viewer) applyLoadedImage(slot asyncImageSlot, loaded *imagedata.LoadedImage, resetView, animateFit, activateFit bool, loadFull imageDecodeFunc) {

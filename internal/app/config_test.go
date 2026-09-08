@@ -34,6 +34,12 @@ func TestDefaultConfigUsesAutomaticGraphicsLibrary(t *testing.T) {
 	}
 }
 
+func TestDefaultConfigUsesEnglish(t *testing.T) {
+	if got := defaultConfig().Language; got != "en" {
+		t.Fatalf("default language = %q, want en", got)
+	}
+}
+
 func TestCompactHelpShowsActiveRenderer(t *testing.T) {
 	if text := (&Viewer{}).helpTextCompact(); !strings.Contains(text, "Renderer: ") {
 		t.Fatalf("compact help does not show renderer: %q", text)

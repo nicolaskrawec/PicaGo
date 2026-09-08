@@ -120,6 +120,7 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - Manual panning or zooming leaves persistent fit mode; resizing then keeps the
   chosen view instead of refitting it.
 - `F1`: toggle the English help overlay.
+- `F2`: toggle the EXIF metadata overlay for the current image.
 - `F11`: toggle borderless fullscreen.
 - `H`: horizontal split comparison.
 - `V`: vertical split comparison.
@@ -165,6 +166,7 @@ without a saved preference are ordered by name.
 
 ```json
 {
+  "language": "en",
   "desktopBackground": true,
   "background": "desktop",
   "showShadow": true,
@@ -175,6 +177,8 @@ without a saved preference are ordered by name.
 }
 ```
 
+- `language`: UI language as a BCP 47 language tag. English (`en`) is currently
+  available and is used as the fallback for missing or unsupported languages.
 - `desktopBackground`: enable the captured Windows desktop as a fullscreen
   background option. Press `B` to cycle between it and the gray, black and
   white backgrounds. Set it to `false` to disable desktop capture.
@@ -188,6 +192,12 @@ without a saved preference are ordered by name.
   actually selected is shown in the `F1` overlay.
 
 If the file is missing, PicaGo creates it with these default values.
+
+User-facing text (the `F1` help overlay, center notifications, loading status,
+errors, and translated option labels) lives in
+`internal/i18n/locales/en.json`. To add a language, copy that catalog, translate
+its values without changing the keys or formatting verbs, then register its
+language code in `internal/i18n/i18n.go`.
 
 ## Supported Formats
 

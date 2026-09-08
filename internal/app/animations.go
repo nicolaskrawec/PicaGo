@@ -163,7 +163,7 @@ func (v *Viewer) zoomAtWithOptions(mouseX, mouseY, factor float64, snapTo100 boo
 	v.targetView.OffsetY = mouseY - centerY - (worldY-imageCenterY)*newZoom
 	v.targetView.Zoom = newZoom
 	v.targetView.Alpha = 1
-	v.showCenterInfo("Zoom %d%%", int(math.Round(newZoom*100)))
+	v.showCenterInfo("notification.zoom", int(math.Round(newZoom*100)))
 }
 
 func (v *Viewer) animateView() {

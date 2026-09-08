@@ -9,6 +9,7 @@ import (
 const appConfigDirectory = "PicaGo"
 
 type config struct {
+	Language                 string `json:"language"`
 	DesktopBackground        bool   `json:"desktopBackground"`
 	Background               string `json:"background"`
 	ShowShadow               bool   `json:"showShadow"`
@@ -20,6 +21,7 @@ type config struct {
 
 func defaultConfig() config {
 	return config{
+		Language:                 "en",
 		DesktopBackground:        true,
 		Background:               "desktop",
 		ShowShadow:               true,

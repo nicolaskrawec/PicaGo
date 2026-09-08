@@ -115,17 +115,17 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 	if v.imageA != nil && v.imageA.FileName != "" {
 		fileA = imageInfoLabel(v.imageA)
 	}
-	fileB := "none"
+	fileB := v.text("state.none")
 	if v.imageB != nil && v.imageB.FileName != "" {
 		fileB = imageInfoLabel(v.imageB)
 	}
-	syncMode := "off"
+	syncMode := v.text("state.off")
 	if v.syncSliderWithImage {
-		syncMode = "on"
+		syncMode = v.text("state.on")
 	}
-	shadowMode := "off"
+	shadowMode := v.text("state.off")
 	if v.showShadow {
-		shadowMode = "on"
+		shadowMode = v.text("state.on")
 	}
 	sortMode := imageSortByNameAscending
 	if v.imageA != nil && v.imageA.FilePath != "" {
@@ -136,54 +136,75 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 	ebiten.ReadDebugInfo(&graphicsInfo)
 	lines := []string{
 		"PicaGo " + Version + " - NkSoft",
-		"Renderer: " + graphicsInfo.GraphicsLibrary.String(),
+		v.message("debug.renderer", graphicsInfo.GraphicsLibrary.String()),
 	}
 	if debug {
 		lines = append(lines,
-			"Current zoom: "+strconv.Itoa(int(math.Round(v.view.Zoom*100)))+"%",
-			"Current rotation: "+strconv.Itoa(v.view.Rotation*90)+"°",
-			"Memory: "+v.memoryStatusText(),
-			"Cache: "+v.prefetchStatusText(),
+			v.message("debug.current_zoom", int(math.Round(v.view.Zoom*100))),
+			v.message("debug.current_rotation", v.view.Rotation*90),
+			v.message("debug.memory", v.memoryStatusText()),
+			v.message("debug.cache", v.prefetchStatusText()),
 		)
 	}
 	lines = append(lines,
 		"",
-		"GEOMETRY",
-		"Mouse wheel: zoom",
-		"Up / Down: zoom",
-		"Z / W: 100% / fit zoom",
-		"R: fit to window",
-		"Ctrl+Left/Right: rotate",
-		"Shift+Left/Right: horizontal mirror",
-		"Shift+Up/Down: vertical mirror",
+		v.text("help.geometry"),
+		v.text("help.mouse_wheel_zoom"),
+		v.text("help.up_down_zoom"),
+		v.text("help.zoom_100_fit"),
+		v.text("help.fit_window"),
+		v.text("help.rotate"),
+		v.text("help.horizontal_mirror"),
+		v.text("help.vertical_mirror"),
 		"",
-		"ADJUSTMENTS",
-		"Bottom-left corner + mouse wheel: horizontal mirror",
-		"Bottom-right corner + mouse wheel: gamma",
-		"Shift+mouse wheel: gamma",
-		"Alt+mouse wheel: exposure / brightness",
-		"Ctrl+Alt+mouse wheel: contrast",
+		v.text("help.adjustments"),
+		v.text("help.corner_horizontal_mirror"),
+		v.text("help.corner_gamma"),
+		v.text("help.shift_gamma"),
+		v.text("help.alt_exposure"),
+		v.text("help.ctrl_alt_contrast"),
 		"",
-		"COMPARISON",
-		"C: circular mask / invert",
-		"H / V: horizontal / vertical split",
-		"Ctrl+mouse wheel: mask opacity",
-		"Ctrl+Shift+mouse wheel: circular mask size",
-		"L: slider sync "+syncMode,
+		v.text("help.comparison"),
+		v.text("help.circular_mask"),
+		v.text("help.split"),
+		v.text("help.mask_opacity"),
+		v.text("help.mask_size"),
+		v.message("help.slider_sync", syncMode),
 		"",
-		"OTHER",
-		"B: background (desktop fullscreen / gray / black / white)",
-		"P: slideshow play / pause",
-		"O: image order (current: "+sortMode.label()+")",
-		"S: shadow "+shadowMode,
-		"F11: fullscreen",
-		"Esc: quit",
+		v.text("help.other"),
+		v.text("help.background"),
+		v.text("help.slideshow"),
+		v.message("help.image_order", v.text(sortMode.translationKey())),
+		v.message("help.shadow", shadowMode),
+		v.text("help.exif"),
+		v.text("help.fullscreen"),
+		v.text("help.quit"),
 		"",
-		"NAVIGATION",
-		"Left / Right: previous / next image",
-		"1: "+fileA,
-		"2: "+fileB,
+		v.text("help.navigation"),
+		v.text("help.previous_next"),
+		v.message("help.image_a", fileA),
+		v.message("help.image_b", fileB),
 	)
+	return strings.Join(lines, "\n")
+}
+
+func (v *Viewer) exifText() string {
+	if v.imageA == nil {
+		return v.text("exif.title") + "\n\n" + v.text("exif.no_image")
+	}
+
+	lines := []string{
+		v.text("exif.title") + " - " + v.imageA.FileName,
+		v.message("exif.dimensions", v.imageA.Width, v.imageA.Height),
+	}
+	if len(v.imageA.EXIF) == 0 {
+		return strings.Join(append(lines, "", v.text("exif.none")), "\n")
+	}
+
+	lines = append(lines, "")
+	for _, tag := range v.imageA.EXIF {
+		lines = append(lines, tag.Name+": "+tag.Value)
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -204,9 +225,16 @@ func (v *Viewer) memoryStatusText() string {
 	toMiB := func(value uint64) string {
 		return strconv.FormatUint(value/(1024*1024), 10) + " MiB"
 	}
-	return "alloc " + toMiB(stats.Alloc) + " / heap " + toMiB(stats.HeapInuse) + " / sys " + toMiB(stats.Sys) +
-		" / cache " + strconv.Itoa(len(v.prefetchedImages)) + " / active " + strconv.Itoa(len(v.prefetchInFlight)) +
-		" / thumbs " + strconv.Itoa(len(v.thumbnailCache)) + "/" + strconv.Itoa(len(v.thumbnailInFlight))
+	return v.message(
+		"debug.memory_values",
+		toMiB(stats.Alloc),
+		toMiB(stats.HeapInuse),
+		toMiB(stats.Sys),
+		len(v.prefetchedImages),
+		len(v.prefetchInFlight),
+		len(v.thumbnailCache),
+		len(v.thumbnailInFlight),
+	)
 }
 
 func (v *Viewer) prefetchStatusText() string {
@@ -237,7 +265,7 @@ func (v *Viewer) prefetchStatusText() string {
 		}
 	}
 	if len(status) == 0 {
-		return "empty"
+		return v.text("state.empty")
 	}
 	return strings.Join(status, " ")
 }
