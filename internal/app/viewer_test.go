@@ -300,12 +300,24 @@ func TestAdjustCompareMaskAlphaClamps(t *testing.T) {
 
 func TestPointInBottomLeftCorner(t *testing.T) {
 	if !pointInBottomLeftCorner(0, 699, 700, cornerCommandTolerance) {
-		t.Fatal("bottom-left pixel is not inside the gamma corner")
+		t.Fatal("bottom-left pixel is not inside the horizontal mirror corner")
 	}
 	if pointInBottomLeftCorner(cornerCommandTolerance, 699, 700, cornerCommandTolerance) {
 		t.Fatal("pixel to the right of the gamma corner is inside it")
 	}
 	if pointInBottomLeftCorner(0, 700-cornerCommandTolerance-1, 700, cornerCommandTolerance) {
+		t.Fatal("pixel above the gamma corner is inside it")
+	}
+}
+
+func TestPointInBottomRightCorner(t *testing.T) {
+	if !pointInBottomRightCorner(999, 699, 1000, 700, cornerCommandTolerance) {
+		t.Fatal("bottom-right pixel is not inside the gamma corner")
+	}
+	if pointInBottomRightCorner(1000-cornerCommandTolerance-1, 699, 1000, 700, cornerCommandTolerance) {
+		t.Fatal("pixel to the left of the gamma corner is inside it")
+	}
+	if pointInBottomRightCorner(999, 700-cornerCommandTolerance-1, 1000, 700, cornerCommandTolerance) {
 		t.Fatal("pixel above the gamma corner is inside it")
 	}
 }

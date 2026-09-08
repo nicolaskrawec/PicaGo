@@ -451,6 +451,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 		pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance),
 		pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance),
 		pointInBottomLeftCorner(mouseX, mouseY, v.windowHeight, cornerCommandTolerance),
+		pointInBottomRightCorner(mouseX, mouseY, v.windowWidth, v.windowHeight, cornerCommandTolerance),
 	)
 
 	if v.showHelp {
@@ -557,7 +558,7 @@ func drawCenterInfoFrame(dst *ebiten.Image, width, height float32) {
 	vector.FillPath(dst, path, &vector.FillOptions{}, options)
 }
 
-func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTopLeft, showTopRight, showBottomLeft bool) {
+func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTopLeft, showTopRight, showBottomLeft, showBottomRight bool) {
 	const size = float32(40)
 	fill := color.NRGBA{48, 48, 48, cornerHintAlpha}
 	options := &vector.DrawPathOptions{AntiAlias: true}
@@ -597,7 +598,21 @@ func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTo
 		options.ColorScale.Reset()
 		options.ColorScale.ScaleWithColor(fill)
 		vector.FillPath(screen, bottomLeft, &vector.FillOptions{}, options)
-		ebitenutil.DebugPrintAt(screen, "G", 8, windowHeight-20)
+		ebitenutil.DebugPrintAt(screen, "H", 8, windowHeight-20)
+	}
+
+	if showBottomRight {
+		right := float32(windowWidth)
+		bottom := float32(windowHeight)
+		bottomRight := &vector.Path{}
+		bottomRight.MoveTo(right, bottom)
+		bottomRight.LineTo(right-size, bottom)
+		bottomRight.Arc(right, bottom, size, math.Pi, math.Pi*1.5, vector.Clockwise)
+		bottomRight.Close()
+		options.ColorScale.Reset()
+		options.ColorScale.ScaleWithColor(fill)
+		vector.FillPath(screen, bottomRight, &vector.FillOptions{}, options)
+		ebitenutil.DebugPrintAt(screen, "G", windowWidth-16, windowHeight-20)
 	}
 
 }

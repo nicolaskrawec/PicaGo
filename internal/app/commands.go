@@ -332,6 +332,8 @@ func (v *Viewer) Update() error {
 		controlPressed := ebiten.IsKeyPressed(ebiten.KeyControl)
 		altPressed := ebiten.IsKeyPressed(ebiten.KeyAlt)
 		if pointInBottomLeftCorner(mouseX, mouseY, v.windowHeight, cornerCommandTolerance) {
+			v.toggleScreenMirror(true)
+		} else if pointInBottomRightCorner(mouseX, mouseY, v.windowWidth, v.windowHeight, cornerCommandTolerance) {
 			v.adjustGamma(wheelDelta)
 		} else if controlPressed && altPressed {
 			v.adjustContrast(wheelDelta)

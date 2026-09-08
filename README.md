@@ -77,6 +77,8 @@ window:
 - Top-left corner: rotate counter-clockwise with left click or wheel up.
 - Top-left corner: rotate clockwise with right click or wheel down.
 - Top-right corner: close the viewer.
+- Bottom-left corner: mirror horizontally with the mouse wheel.
+- Bottom-right corner: adjust gamma with the mouse wheel.
 
 These controls are intentionally lightweight so the viewer can stay mostly chrome-free.
 
@@ -98,6 +100,8 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
 - `Top-left + left click/wheel up`: rotate 90 degrees counter-clockwise.
 - `Top-left + right click/wheel down`: rotate 90 degrees clockwise.
 - `Top-right + left click`: quit.
+- `Bottom-left + mouse wheel`: mirror horizontally.
+- `Bottom-right + mouse wheel`: adjust gamma.
 - `Thumbnail strip + left click`: open that image directly.
 
 ### Keyboard

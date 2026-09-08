@@ -38,6 +38,13 @@ func pointInBottomLeftCorner(x, y, height, tolerance int) bool {
 	return x >= 0 && x < tolerance && y >= height-tolerance && y < height
 }
 
+func pointInBottomRightCorner(x, y, width, height, tolerance int) bool {
+	if width <= 0 || height <= 0 || tolerance <= 0 {
+		return false
+	}
+	return x >= width-tolerance && x < width && y >= height-tolerance && y < height
+}
+
 func absInt(value int) int {
 	if value < 0 {
 		return -value
@@ -151,7 +158,8 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 		"Shift+Up/Down: vertical mirror",
 		"",
 		"ADJUSTMENTS",
-		"Bottom-left corner + mouse wheel: gamma",
+		"Bottom-left corner + mouse wheel: horizontal mirror",
+		"Bottom-right corner + mouse wheel: gamma",
 		"Shift+mouse wheel: gamma",
 		"Alt+mouse wheel: exposure / brightness",
 		"Ctrl+Alt+mouse wheel: contrast",

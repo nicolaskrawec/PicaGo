@@ -14,16 +14,17 @@ import (
 )
 
 const (
-	thumbnailMinSize       = 50.0
-	thumbnailSizeAmplitude = 30.0
-	thumbnailSizeFalloff   = 50.0
-	thumbnailGap           = 2
-	thumbnailBottomMargin  = 10
-	thumbnailMaxRadius     = 8
-	thumbnailPreloadRadius = 16
-	thumbnailMoveDuration  = 280 * time.Millisecond
-	thumbnailFrameAlpha    = 50
-	thumbnailLeftExclusion = 20
+	thumbnailMinSize        = 50.0
+	thumbnailSizeAmplitude  = 30.0
+	thumbnailSizeFalloff    = 50.0
+	thumbnailGap            = 2
+	thumbnailBottomMargin   = 10
+	thumbnailMaxRadius      = 8
+	thumbnailPreloadRadius  = 16
+	thumbnailMoveDuration   = 280 * time.Millisecond
+	thumbnailFrameAlpha     = 50
+	thumbnailLeftExclusion  = 20
+	thumbnailRightExclusion = 20
 )
 
 type thumbnailResult struct {
@@ -608,8 +609,9 @@ func minFloat64(a, b float64) float64 {
 }
 
 func (v *Viewer) thumbnailPathAt(x, y int) (string, bool) {
-	if v.thumbnailOpacity <= 0 || x < thumbnailLeftExclusion ||
-		pointInBottomLeftCorner(x, y, v.windowHeight, cornerCommandTolerance) {
+	if v.thumbnailOpacity <= 0 || x < thumbnailLeftExclusion || x >= v.windowWidth-thumbnailRightExclusion ||
+		pointInBottomLeftCorner(x, y, v.windowHeight, cornerCommandTolerance) ||
+		pointInBottomRightCorner(x, y, v.windowWidth, v.windowHeight, cornerCommandTolerance) {
 		return "", false
 	}
 	items := v.currentThumbnailItems()
@@ -628,8 +630,9 @@ func (v *Viewer) thumbnailPathAt(x, y int) (string, bool) {
 }
 
 func (v *Viewer) pointInThumbnailStrip(x, y int) bool {
-	if v.thumbnailOpacity <= 0 || x < thumbnailLeftExclusion ||
-		pointInBottomLeftCorner(x, y, v.windowHeight, cornerCommandTolerance) {
+	if v.thumbnailOpacity <= 0 || x < thumbnailLeftExclusion || x >= v.windowWidth-thumbnailRightExclusion ||
+		pointInBottomLeftCorner(x, y, v.windowHeight, cornerCommandTolerance) ||
+		pointInBottomRightCorner(x, y, v.windowWidth, v.windowHeight, cornerCommandTolerance) {
 		return false
 	}
 	items := v.currentThumbnailItems()
@@ -658,9 +661,10 @@ func (v *Viewer) updateThumbnailVisibility(now time.Time, mouseX, mouseY int) {
 func (v *Viewer) shouldShowThumbnails(now time.Time, mouseX, mouseY int) bool {
 	return v.imageA != nil &&
 		!v.thumbnailsDisabled() &&
-		mouseX >= thumbnailLeftExclusion && mouseX < v.windowWidth &&
+		mouseX >= thumbnailLeftExclusion && mouseX < v.windowWidth-thumbnailRightExclusion &&
 		mouseY >= maxInt(0, v.windowHeight-thumbnailRevealDistance) && mouseY < v.windowHeight &&
 		!pointInBottomLeftCorner(mouseX, mouseY, v.windowHeight, cornerCommandTolerance) &&
+		!pointInBottomRightCorner(mouseX, mouseY, v.windowWidth, v.windowHeight, cornerCommandTolerance) &&
 		!v.cursorIdle(now)
 }
 
