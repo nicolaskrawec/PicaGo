@@ -361,6 +361,7 @@ func (v *Viewer) shouldStayActive(now time.Time, mouseMoved, leftMousePressed, r
 		ebiten.IsKeyPressed(ebiten.KeyL) ||
 		ebiten.IsKeyPressed(ebiten.KeyS) ||
 		ebiten.IsKeyPressed(ebiten.KeyP) ||
+		ebiten.IsKeyPressed(ebiten.KeyO) ||
 		ebiten.IsKeyPressed(ebiten.KeyB) ||
 		ebiten.IsKeyPressed(ebiten.KeyF11) ||
 		ebiten.IsKeyPressed(ebiten.KeyC) ||

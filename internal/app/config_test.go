@@ -39,3 +39,9 @@ func TestCompactHelpShowsActiveRenderer(t *testing.T) {
 		t.Fatalf("compact help does not show renderer: %q", text)
 	}
 }
+
+func TestCompactHelpShowsFolderImageOrderShortcut(t *testing.T) {
+	if text := (&Viewer{}).helpTextCompact(); !strings.Contains(text, "O: image order (current: name ascending)") {
+		t.Fatalf("compact help does not show the image order shortcut: %q", text)
+	}
+}

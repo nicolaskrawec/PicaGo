@@ -298,6 +298,18 @@ func TestAdjustCompareMaskAlphaClamps(t *testing.T) {
 	}
 }
 
+func TestPointInBottomLeftCorner(t *testing.T) {
+	if !pointInBottomLeftCorner(0, 699, 700, cornerCommandTolerance) {
+		t.Fatal("bottom-left pixel is not inside the gamma corner")
+	}
+	if pointInBottomLeftCorner(cornerCommandTolerance, 699, 700, cornerCommandTolerance) {
+		t.Fatal("pixel to the right of the gamma corner is inside it")
+	}
+	if pointInBottomLeftCorner(0, 700-cornerCommandTolerance-1, 700, cornerCommandTolerance) {
+		t.Fatal("pixel above the gamma corner is inside it")
+	}
+}
+
 func TestResetViewParametersRestoresDefaults(t *testing.T) {
 	v := Viewer{
 		imageA:       &imagedata.LoadedImage{Width: 100, Height: 50},

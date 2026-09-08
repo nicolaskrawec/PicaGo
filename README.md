@@ -125,6 +125,8 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
   and white when the desktop background is available. In a window, or without
   desktop capture, it cycles gray, black and white.
 - `P`: play/pause a looping slideshow of the images in the current folder.
+- `O`: cycle the current folder's image order between name, modification date
+  and creation date, in ascending and descending order.
 - `L`: toggle slider sync with image movement.
 - `S`: toggle the image shadow.
 - `Shift + mouse wheel`: adjust the gamma correction of the displayed image;
@@ -151,6 +153,11 @@ the image is opened again. The file uses compact JSON and indexes settings by
 a fast hash of the normalized absolute path; the path itself is not stored.
 Images without changed parameters are not kept in that file. Older key formats
 are ignored.
+
+The image order selected with `O` is stored per folder in
+`folder-settings.json`, alongside `image-views.json`. Folder paths are
+normalized and stored only as SHA-256 hashes, never in clear text. Folders
+without a saved preference are ordered by name.
 
 ```json
 {

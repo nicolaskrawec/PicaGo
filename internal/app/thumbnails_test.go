@@ -273,6 +273,15 @@ func TestThumbnailsShowOnlyNearBottomWhileCursorIsActive(t *testing.T) {
 	if v.shouldShowThumbnails(now, 500, 500) {
 		t.Fatal("cursor away from bottom revealed thumbnails")
 	}
+	if v.shouldShowThumbnails(now, thumbnailLeftExclusion-1, 650) {
+		t.Fatal("left exclusion strip revealed thumbnails")
+	}
+	if !v.shouldShowThumbnails(now, thumbnailLeftExclusion, 650) {
+		t.Fatal("pixel immediately right of left exclusion strip did not reveal thumbnails")
+	}
+	if v.shouldShowThumbnails(now, thumbnailLeftExclusion, 699) {
+		t.Fatal("bottom-left gamma corner revealed thumbnails")
+	}
 	if v.shouldShowThumbnails(now.Add(cursorIdleDelay), 500, 699) {
 		t.Fatal("idle cursor kept thumbnails visible")
 	}

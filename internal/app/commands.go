@@ -115,6 +115,9 @@ func (v *Viewer) Update() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyP) {
 		v.toggleSlideshow(now)
 	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyO) {
+		v.cycleImageSort()
+	}
 	v.updateNavigationKeyRepeat(now)
 	if ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
 		v.rotateImage(-1)
@@ -328,7 +331,9 @@ func (v *Viewer) Update() error {
 		shiftPressed := ebiten.IsKeyPressed(ebiten.KeyShift)
 		controlPressed := ebiten.IsKeyPressed(ebiten.KeyControl)
 		altPressed := ebiten.IsKeyPressed(ebiten.KeyAlt)
-		if controlPressed && altPressed {
+		if pointInBottomLeftCorner(mouseX, mouseY, v.windowHeight, cornerCommandTolerance) {
+			v.adjustGamma(wheelDelta)
+		} else if controlPressed && altPressed {
 			v.adjustContrast(wheelDelta)
 		} else if v.mode == displayModeCompare && v.imageB != nil && controlPressed && !shiftPressed {
 			v.adjustCompareMaskAlpha(wheelDelta)

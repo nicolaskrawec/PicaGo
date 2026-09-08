@@ -3,11 +3,156 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"sort"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 
 	imagedata "viewergo/internal/image"
 )
+
+type imageSortMode int
+
+const (
+	imageSortByNameAscending imageSortMode = iota
+	imageSortByNameDescending
+	imageSortByModificationDateAscending
+	imageSortByModificationDateDescending
+	imageSortByCreationDateAscending
+	imageSortByCreationDateDescending
+	imageSortModeCount
+)
+
+type navigationImage struct {
+	path         string
+	name         string
+	modifiedTime time.Time
+	createdTime  time.Time
+}
+
+func (mode imageSortMode) configValue() string {
+	switch mode {
+	case imageSortByNameDescending:
+		return "nameDescending"
+	case imageSortByModificationDateAscending:
+		return "modificationDateAscending"
+	case imageSortByModificationDateDescending:
+		return "modificationDateDescending"
+	case imageSortByCreationDateAscending:
+		return "creationDateAscending"
+	case imageSortByCreationDateDescending:
+		return "creationDateDescending"
+	default:
+		return "nameAscending"
+	}
+}
+
+func imageSortModeFromConfig(value string) imageSortMode {
+	switch value {
+	case "nameDescending":
+		return imageSortByNameDescending
+	case "modificationDateAscending":
+		return imageSortByModificationDateAscending
+	case "modificationDateDescending":
+		return imageSortByModificationDateDescending
+	case "creationDateAscending":
+		return imageSortByCreationDateAscending
+	case "creationDateDescending":
+		return imageSortByCreationDateDescending
+	default:
+		return imageSortByNameAscending
+	}
+}
+
+func (mode imageSortMode) label() string {
+	switch mode {
+	case imageSortByNameDescending:
+		return "name descending"
+	case imageSortByModificationDateAscending:
+		return "modification date ascending"
+	case imageSortByModificationDateDescending:
+		return "modification date descending"
+	case imageSortByCreationDateAscending:
+		return "creation date ascending"
+	case imageSortByCreationDateDescending:
+		return "creation date descending"
+	default:
+		return "name ascending"
+	}
+}
+
+func (mode imageSortMode) notificationLabel() string {
+	switch mode {
+	case imageSortByNameDescending:
+		return "nom decroissant"
+	case imageSortByModificationDateAscending:
+		return "modification croissante"
+	case imageSortByModificationDateDescending:
+		return "modification decroissante"
+	case imageSortByCreationDateAscending:
+		return "creation croissante"
+	case imageSortByCreationDateDescending:
+		return "creation decroissante"
+	default:
+		return "nom croissant"
+	}
+}
+
+func sortNavigationImages(images []navigationImage, mode imageSortMode) {
+	sort.SliceStable(images, func(i, j int) bool {
+		left, right := images[i], images[j]
+		switch mode {
+		case imageSortByNameDescending:
+			return left.name > right.name
+		case imageSortByModificationDateAscending:
+			if !left.modifiedTime.Equal(right.modifiedTime) {
+				return left.modifiedTime.Before(right.modifiedTime)
+			}
+		case imageSortByModificationDateDescending:
+			if !left.modifiedTime.Equal(right.modifiedTime) {
+				return left.modifiedTime.After(right.modifiedTime)
+			}
+		case imageSortByCreationDateAscending:
+			if !left.createdTime.Equal(right.createdTime) {
+				return left.createdTime.Before(right.createdTime)
+			}
+		case imageSortByCreationDateDescending:
+			if !left.createdTime.Equal(right.createdTime) {
+				return left.createdTime.After(right.createdTime)
+			}
+		}
+		return left.name < right.name
+	})
+}
+
+func (v *Viewer) currentImageSortMode(dir string) imageSortMode {
+	return v.folderSortModes[folderSettingsKey(dir)]
+}
+
+func (v *Viewer) cycleImageSort() {
+	if v.imageA == nil || v.imageA.FilePath == "" {
+		return
+	}
+	dir := filepath.Dir(v.imageA.FilePath)
+	mode := (v.currentImageSortMode(dir) + 1) % imageSortModeCount
+	if v.folderSortModes == nil {
+		v.folderSortModes = make(map[string]imageSortMode)
+	}
+	if mode == imageSortByNameAscending {
+		delete(v.folderSortModes, folderSettingsKey(dir))
+	} else {
+		v.folderSortModes[folderSettingsKey(dir)] = mode
+	}
+	_ = saveFolderSortModes(v.folderSortModes)
+
+	// Rebuild the current directory immediately. The current image is found
+	// again in the reordered list, so changing the order never changes it.
+	v.navigationDirectory = ""
+	v.navigationImages = nil
+	v.stopThumbnailAnimation()
+	v.prefetchAdjacentImages()
+	v.showCenterInfo("Tri : %s", mode.notificationLabel())
+}
 
 func (v *Viewer) loadAdjacentImage(step int) error {
 	if v.imageA == nil || v.imageA.FilePath == "" || step == 0 {
@@ -70,12 +215,28 @@ func (v *Viewer) navigationImagePaths(filePath string) ([]string, int, error) {
 			return nil, -1, err
 		}
 
-		images := make([]string, 0, len(entries))
+		mode := v.currentImageSortMode(dir)
+		items := make([]navigationImage, 0, len(entries))
 		for _, entry := range entries {
 			if entry.IsDir() || !imagedata.IsSupportedFile(entry.Name()) {
 				continue
 			}
-			images = append(images, filepath.Join(dir, entry.Name()))
+			item := navigationImage{
+				path: filepath.Join(dir, entry.Name()),
+				name: entry.Name(),
+			}
+			if mode != imageSortByNameAscending && mode != imageSortByNameDescending {
+				if info, infoErr := entry.Info(); infoErr == nil {
+					item.modifiedTime = info.ModTime()
+					item.createdTime = fileCreationTime(item.path, info)
+				}
+			}
+			items = append(items, item)
+		}
+		sortNavigationImages(items, mode)
+		images := make([]string, len(items))
+		for index, item := range items {
+			images[index] = item.path
 		}
 		v.navigationDirectory = dir
 		v.navigationImages = images

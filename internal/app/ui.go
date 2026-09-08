@@ -31,6 +31,13 @@ func pointInTopLeftCorner(x, y, tolerance int) bool {
 	return x >= 0 && x < tolerance && y >= 0 && y < tolerance
 }
 
+func pointInBottomLeftCorner(x, y, height, tolerance int) bool {
+	if height <= 0 || tolerance <= 0 {
+		return false
+	}
+	return x >= 0 && x < tolerance && y >= height-tolerance && y < height
+}
+
 func absInt(value int) int {
 	if value < 0 {
 		return -value
@@ -113,6 +120,10 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 	if v.showShadow {
 		shadowMode = "on"
 	}
+	sortMode := imageSortByNameAscending
+	if v.imageA != nil && v.imageA.FilePath != "" {
+		sortMode = v.currentImageSortMode(filepath.Dir(v.imageA.FilePath))
+	}
 
 	var graphicsInfo ebiten.DebugInfo
 	ebiten.ReadDebugInfo(&graphicsInfo)
@@ -140,6 +151,7 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 		"Shift+Up/Down: vertical mirror",
 		"",
 		"ADJUSTMENTS",
+		"Bottom-left corner + mouse wheel: gamma",
 		"Shift+mouse wheel: gamma",
 		"Alt+mouse wheel: exposure / brightness",
 		"Ctrl+Alt+mouse wheel: contrast",
@@ -154,6 +166,7 @@ func (v *Viewer) helpTextCategorized(debug bool) string {
 		"OTHER",
 		"B: background (desktop fullscreen / gray / black / white)",
 		"P: slideshow play / pause",
+		"O: image order (current: "+sortMode.label()+")",
 		"S: shadow "+shadowMode,
 		"F11: fullscreen",
 		"Esc: quit",

@@ -256,6 +256,7 @@ type Viewer struct {
 	prefetchAfterHighRes       *imagedata.LoadedImage
 	navigationDirectory        string
 	navigationImages           []string
+	folderSortModes            map[string]imageSortMode
 	imageViewStates            map[string]render.View
 	// Zoom and position are intentionally kept separately from
 	// imageViewStates: they follow the image during this process only and are
@@ -313,6 +314,7 @@ func Run(args []string) error {
 		thumbnailInFlight: make(map[string]bool),
 		thumbnailFailed:   make(map[string]bool),
 		thumbnailCache:    make(map[string]*thumbnailCacheEntry),
+		folderSortModes:   loadFolderSortModes(),
 		imageViewStates:   loadImageViewStates(),
 		sessionImageViews: make(map[string]sessionImageView),
 	}
@@ -441,13 +443,15 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 		}
 	}
 	mouseX, mouseY := ebiten.CursorPosition()
+	v.drawThumbnailStrip(screen)
 	drawCornerHints(
 		screen,
 		v.windowWidth,
+		v.windowHeight,
 		pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance),
 		pointInTopRightCorner(mouseX, mouseY, v.windowWidth, cornerCommandTolerance),
+		pointInBottomLeftCorner(mouseX, mouseY, v.windowHeight, cornerCommandTolerance),
 	)
-	v.drawThumbnailStrip(screen)
 
 	if v.showHelp {
 		v.drawHelpOverlay(screen)
@@ -553,7 +557,7 @@ func drawCenterInfoFrame(dst *ebiten.Image, width, height float32) {
 	vector.FillPath(dst, path, &vector.FillOptions{}, options)
 }
 
-func drawCornerHints(screen *ebiten.Image, windowWidth int, showTopLeft, showTopRight bool) {
+func drawCornerHints(screen *ebiten.Image, windowWidth, windowHeight int, showTopLeft, showTopRight, showBottomLeft bool) {
 	const size = float32(40)
 	fill := color.NRGBA{48, 48, 48, cornerHintAlpha}
 	options := &vector.DrawPathOptions{AntiAlias: true}
@@ -581,6 +585,19 @@ func drawCornerHints(screen *ebiten.Image, windowWidth int, showTopLeft, showTop
 		options.ColorScale.ScaleWithColor(fill)
 		vector.FillPath(screen, topRight, &vector.FillOptions{}, options)
 		ebitenutil.DebugPrintAt(screen, "X", windowWidth-16, 8)
+	}
+
+	if showBottomLeft {
+		bottom := float32(windowHeight)
+		bottomLeft := &vector.Path{}
+		bottomLeft.MoveTo(0, bottom)
+		bottomLeft.LineTo(0, bottom-size)
+		bottomLeft.Arc(0, bottom, size, -math.Pi/2, 0, vector.Clockwise)
+		bottomLeft.Close()
+		options.ColorScale.Reset()
+		options.ColorScale.ScaleWithColor(fill)
+		vector.FillPath(screen, bottomLeft, &vector.FillOptions{}, options)
+		ebitenutil.DebugPrintAt(screen, "G", 8, windowHeight-20)
 	}
 
 }
