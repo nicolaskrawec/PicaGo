@@ -34,9 +34,9 @@ func TestDefaultConfigUsesAutomaticGraphicsLibrary(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigUsesEnglish(t *testing.T) {
-	if got := defaultConfig().Language; got != "en" {
-		t.Fatalf("default language = %q, want en", got)
+func TestDefaultConfigUsesAutomaticLanguage(t *testing.T) {
+	if got := defaultConfig().Language; got != "auto" {
+		t.Fatalf("default language = %q, want auto", got)
 	}
 }
 

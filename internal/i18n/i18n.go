@@ -12,13 +12,21 @@ import (
 	"strings"
 )
 
-const DefaultLanguage = "en"
+const (
+	AutoLanguage    = "auto"
+	DefaultLanguage = "en"
+)
 
 //go:embed locales/*.json
 var localeFiles embed.FS
 
 var supportedLanguages = map[string]struct{}{
 	DefaultLanguage: {},
+	"de":            {},
+	"es":            {},
+	"fr":            {},
+	"it":            {},
+	"pl":            {},
 }
 
 var catalogs = loadCatalogs()
@@ -29,13 +37,21 @@ type Localizer struct {
 }
 
 func New(language string) Localizer {
-	language = normalizeLanguage(language)
+	language = resolveLanguage(language, systemLanguage())
 	messages := catalogs[language]
 	if len(messages) == 0 {
 		language = DefaultLanguage
 		messages = catalogs[DefaultLanguage]
 	}
 	return Localizer{language: language, messages: messages}
+}
+
+func resolveLanguage(configuredLanguage, detectedLanguage string) string {
+	configuredLanguage = strings.ToLower(strings.TrimSpace(configuredLanguage))
+	if configuredLanguage == "" || configuredLanguage == AutoLanguage {
+		return normalizeLanguage(detectedLanguage)
+	}
+	return normalizeLanguage(configuredLanguage)
 }
 
 func (l Localizer) Language() string {

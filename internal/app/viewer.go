@@ -322,7 +322,12 @@ func Run(args []string) error {
 		imageViewStates:   loadImageViewStates(),
 		sessionImageViews: make(map[string]sessionImageView),
 	}
-	game.preferences.Language = game.localizer.Language()
+	// Keep "auto" in the preferences so a later OS language change is picked
+	// up. Explicit and invalid values are normalized before they are saved.
+	configuredLanguage := strings.ToLower(strings.TrimSpace(cfg.Language))
+	if configuredLanguage != "" && configuredLanguage != i18n.AutoLanguage {
+		game.preferences.Language = game.localizer.Language()
+	}
 
 	ebiten.SetWindowResizable(true)
 	ebiten.SetTPS(ebiten.SyncWithFPS)

@@ -21,7 +21,7 @@ type config struct {
 
 func defaultConfig() config {
 	return config{
-		Language:                 "en",
+		Language:                 "auto",
 		DesktopBackground:        true,
 		Background:               "desktop",
 		ShowShadow:               true,

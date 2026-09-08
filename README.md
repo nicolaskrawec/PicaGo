@@ -166,7 +166,7 @@ without a saved preference are ordered by name.
 
 ```json
 {
-  "language": "en",
+  "language": "auto",
   "desktopBackground": true,
   "background": "desktop",
   "showShadow": true,
@@ -177,8 +177,10 @@ without a saved preference are ordered by name.
 }
 ```
 
-- `language`: UI language as a BCP 47 language tag. English (`en`) is currently
-  available and is used as the fallback for missing or unsupported languages.
+- `language`: UI language. The default `auto` follows the operating-system
+  language. Use a BCP 47 language tag such as `de`, `en`, `es`, `fr`, `it` or
+  `pl` to override it.
+  English is used as the fallback for missing or unsupported languages.
 - `desktopBackground`: enable the captured Windows desktop as a fullscreen
   background option. Press `B` to cycle between it and the gray, black and
   white backgrounds. Set it to `false` to disable desktop capture.
@@ -194,10 +196,11 @@ without a saved preference are ordered by name.
 If the file is missing, PicaGo creates it with these default values.
 
 User-facing text (the `F1` help overlay, center notifications, loading status,
-errors, and translated option labels) lives in
-`internal/i18n/locales/en.json`. To add a language, copy that catalog, translate
-its values without changing the keys or formatting verbs, then register its
-language code in `internal/i18n/i18n.go`.
+errors, and translated option labels) lives in `internal/i18n/locales`. English
+English, French, German, Italian, Spanish and Polish are currently available.
+To add a language, copy the English catalog, translate its values without
+changing the keys or formatting verbs, then register its language code in
+`internal/i18n/i18n.go`.
 
 ## Supported Formats
 
