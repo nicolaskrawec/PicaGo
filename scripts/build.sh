@@ -59,36 +59,6 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd -- "$script_dir/.." && pwd)"
 cd "$project_root"
 
-build_version() {
-    if [[ -n "$version" ]]; then
-        printf '%s\n' "$version"
-        return
-    fi
-
-    local sha tag exact count resolved dirty=""
-    sha="$(git rev-parse --short HEAD 2>/dev/null || true)"
-    if [[ -z "$sha" ]]; then
-        date '+dev-%Y%m%d%H%M%S'
-        return
-    fi
-
-    tag="$(git tag --list 'v*' --sort=-creatordate | sed -n '1p')"
-    exact="$(git tag --points-at HEAD --list 'v*' | sed -n '1p')"
-    if ! git diff --quiet --ignore-submodules HEAD --; then
-        dirty=".dirty"
-    fi
-
-    if [[ -n "$exact" ]]; then
-        resolved="$exact"
-    elif [[ -n "$tag" ]]; then
-        count="$(git rev-list "$tag..HEAD" --count 2>/dev/null || printf '0')"
-        resolved="$tag+$count.$sha"
-    else
-        resolved="v0.0.0+$sha"
-    fi
-    printf '%s%s\n' "$resolved" "$dirty"
-}
-
 goversioninfo_tool() {
     local tool
     tool="$(go env GOPATH)/bin/goversioninfo"
@@ -99,22 +69,6 @@ goversioninfo_tool() {
     printf '%s\n' "$tool"
 }
 
-windows_version() {
-    local value="$1" numbers part result="" count=0
-    numbers="$(printf '%s' "$value" | tr -cs '0-9' '\n')"
-    while IFS= read -r part && ((count < 4)); do
-        [[ -z "$part" ]] && continue
-        ((part > 65535)) && part=65535
-        result+="${result:+.}$((10#$part))"
-        ((count += 1))
-    done <<< "$numbers"
-    while ((count < 4)); do
-        result+="${result:+.}0"
-        ((count += 1))
-    done
-    printf '%s\n' "$result"
-}
-
 generated_resource=""
 cleanup() {
     if [[ -n "$generated_resource" ]]; then
@@ -123,7 +77,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
-resolved_version="$(build_version)"
+version_args=(go run ./cmd/buildversion --format lines)
+if [[ -n "$version" ]]; then
+    version_args+=(--version "$version")
+fi
+version_output="$("${version_args[@]}")"
+resolved_version="$(sed -n '1p' <<< "$version_output")"
+numeric_version="$(sed -n '2p' <<< "$version_output")"
+if [[ -z "$resolved_version" || -z "$numeric_version" ]]; then
+    echo "Unexpected output from the version tool" >&2
+    exit 1
+fi
 mkdir -p -- "$project_root/$output_dir"
 targets="${targets//,/ }"
 
@@ -144,7 +108,6 @@ for target in $targets; do
         ldflags="$ldflags -H windowsgui"
         generated_resource="$project_root/rsrc_windows_${goarch}.syso"
         artifact="PicaGo_${resolved_version}_${goos}_${goarch}${suffix}"
-        numeric_version="$(windows_version "$resolved_version")"
         IFS=. read -r ver_major ver_minor ver_patch ver_build <<< "$numeric_version"
         GOARCH="$goarch" "$(goversioninfo_tool)" \
             -icon="$project_root/internal/assets/icon.ico" -o="$generated_resource" \

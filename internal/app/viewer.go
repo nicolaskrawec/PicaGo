@@ -1,8 +1,11 @@
 package app
 
 import (
+	"fmt"
 	"image/color"
+	"io"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -112,7 +115,7 @@ const zoomKeyStepFactor = 1.10
 var Version = "dev"
 
 func windowTitle(imageName string) string {
-	title := "PicaGo v" + Version
+	title := "PicaGo " + Version
 	if imageName == "" {
 		return title
 	}
@@ -278,6 +281,15 @@ type Viewer struct {
 }
 
 func Run(args []string) error {
+	return run(args, os.Stdout)
+}
+
+func run(args []string, output io.Writer) error {
+	if len(args) == 1 && (args[0] == "--version" || args[0] == "-version") {
+		_, err := fmt.Fprintf(output, "PicaGo %s\n", Version)
+		return err
+	}
+
 	cfg := loadConfig()
 	initDebugLogging(cfg.ShowDebug)
 	debugf("startup: args=%d desktopBackground=%v background=%q graphicsLibrary=%q", len(args), cfg.DesktopBackground, cfg.Background, cfg.GraphicsLibrary)

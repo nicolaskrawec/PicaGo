@@ -8,6 +8,10 @@
   #define AppVersion "dev"
 #endif
 
+#ifndef AppNumericVersion
+  #define AppNumericVersion "0.0.0.0"
+#endif
+
 #ifndef BuildDir
   #error BuildDir non defini. Utilise scripts\build-installer.ps1.
 #endif
@@ -20,6 +24,7 @@
 AppId={{A4F49531-20B5-4DFD-8D7F-45F7466EFA90}
 AppName={#MyAppName}
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppNumericVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}

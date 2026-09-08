@@ -235,6 +235,14 @@ go run . "C:\path\to\image.jpg"
 
 Without arguments, the app opens in a `640x480` window.
 
+To display the version without opening the viewer:
+
+```powershell
+PicaGo.exe --version
+```
+
+The development equivalent is `go run . --version`.
+
 ## Automated Builds
 
 From the project root:
@@ -252,7 +260,8 @@ chmod +x ./scripts/build.sh
 
 The script:
 
-- computes the version automatically from Git
+- computes the version automatically from the nearest reachable semantic Git tag
+- validates explicit versions as SemVer and removes their optional `v` prefix
 - injects that version into `viewergo/internal/app.Version`
 - produces multi-platform binaries in `dist/`
 - builds Windows binaries without a visible console window
@@ -260,10 +269,15 @@ The script:
 
 Automatic version examples:
 
-- exact tag on `HEAD`: `v1.2.3`
-- commits after a tag: `v1.2.3+4.6839b09`
-- no tag yet: `v0.0.0+6839b09`
-- local modifications: `.dirty` suffix
+- exact tag `v1.2.3` on `HEAD`: `1.2.3`
+- commits after a tag: `1.2.3-4-g6839b09`
+- no reachable tag: `0.0.0-42-g6839b09`
+- local modifications or untracked files: `-dirty` suffix
+
+Windows resources use a separate numeric four-part version. For example,
+`1.2.3-4-g6839b09` is displayed by PicaGo while Windows receives `1.2.3.4`.
+The shared `cmd/buildversion` tool is the single source of this version logic
+for the PowerShell build, Bash build and Windows installer scripts.
 
 Examples:
 

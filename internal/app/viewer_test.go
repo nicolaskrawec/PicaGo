@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"image"
 	"testing"
 	"time"
@@ -9,6 +10,22 @@ import (
 	imagedata "viewergo/internal/image"
 	"viewergo/internal/render"
 )
+
+func TestRunPrintsVersionWithoutStartingViewer(t *testing.T) {
+	previousVersion := Version
+	Version = "1.3.0"
+	t.Cleanup(func() { Version = previousVersion })
+
+	for _, argument := range []string{"--version", "-version"} {
+		var output bytes.Buffer
+		if err := run([]string{argument}, &output); err != nil {
+			t.Fatalf("run(%q): %v", argument, err)
+		}
+		if got, want := output.String(), "PicaGo 1.3.0\n"; got != want {
+			t.Fatalf("run(%q) output = %q, want %q", argument, got, want)
+		}
+	}
+}
 
 func TestCursorBecomesIdleAfterDelay(t *testing.T) {
 	now := time.Now()

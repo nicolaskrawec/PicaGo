@@ -24,54 +24,6 @@ function Get-VersionInfoTool {
     return $toolPath
 }
 
-function Get-WindowsVersion {
-    param([string]$ResolvedVersion)
-
-    $numbers = [regex]::Matches($ResolvedVersion, '\d+') | ForEach-Object { [int]$_.Value }
-    $parts = @(0, 0, 0, 0)
-    for ($i = 0; $i -lt [Math]::Min(4, $numbers.Count); $i++) {
-        $parts[$i] = [Math]::Min(65535, $numbers[$i])
-    }
-    return $parts
-}
-
-function Get-BuildVersion {
-    param([string]$ExplicitVersion)
-
-    if ($ExplicitVersion) {
-        return $ExplicitVersion
-    }
-
-    $sha = (git rev-parse --short HEAD 2>$null).Trim()
-    if (-not $sha) {
-        return "dev-" + (Get-Date -Format "yyyyMMddHHmmss")
-    }
-
-    $tag = git tag --list "v*" --sort=-creatordate | Select-Object -First 1
-    $exact = git tag --points-at HEAD --list "v*" | Select-Object -First 1
-    git diff --quiet --ignore-submodules HEAD --
-    $dirty = $LASTEXITCODE -ne 0
-
-    if ($exact) {
-        $resolved = $exact.Trim()
-    } elseif ($tag) {
-        $tag = $tag.Trim()
-        $count = (git rev-list "$tag..HEAD" --count 2>$null).Trim()
-        if (-not $count) {
-            $count = "0"
-        }
-        $resolved = "$tag+$count.$sha"
-    } else {
-        $resolved = "v0.0.0+$sha"
-    }
-
-    if ($dirty) {
-        $resolved += ".dirty"
-    }
-
-    return $resolved
-}
-
 function Get-ArtifactName {
     param(
         [string]$Name,
@@ -89,6 +41,7 @@ function New-WindowsResource {
         [string]$ProjectRoot,
         [string]$Goarch,
         [string]$ResolvedVersion,
+        [string]$WindowsVersion,
         [string]$OriginalFilename
     )
 
@@ -99,13 +52,12 @@ function New-WindowsResource {
     }
 
     $output = Join-Path $ProjectRoot "rsrc_windows_${Goarch}.syso"
-    $parts = Get-WindowsVersion -ResolvedVersion $ResolvedVersion
-    $numericVersion = ($parts -join ".")
+    $parts = $WindowsVersion.Split(".")
     $arguments = @(
         "-icon=$iconPath", "-o=$output",
         "-ver-major=$($parts[0])", "-ver-minor=$($parts[1])", "-ver-patch=$($parts[2])", "-ver-build=$($parts[3])",
         "-product-ver-major=$($parts[0])", "-product-ver-minor=$($parts[1])", "-product-ver-patch=$($parts[2])", "-product-ver-build=$($parts[3])",
-        "-file-version=$numericVersion", "-product-version=$numericVersion",
+        "-file-version=$WindowsVersion", "-product-version=$WindowsVersion",
         "-product-name=PicaGo", "-company=NkSoft", "-internal-name=PicaGo", "-original-name=$OriginalFilename",
         "-description=PicaGo image viewer", "-comment=Build $ResolvedVersion"
     )
@@ -118,7 +70,24 @@ function New-WindowsResource {
 }
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$resolvedVersion = Get-BuildVersion -ExplicitVersion $Version
+$versionArguments = @("run", "./cmd/buildversion", "--format", "lines")
+if ($Version) {
+    $versionArguments += @("--version", $Version)
+}
+Push-Location $projectRoot
+try {
+    $versionInfo = @(& go @versionArguments)
+    if ($LASTEXITCODE -ne 0) {
+        throw "La resolution de la version a echoue"
+    }
+} finally {
+    Pop-Location
+}
+if ($versionInfo.Count -ne 2) {
+    throw "Sortie inattendue de l'outil de version"
+}
+$resolvedVersion = $versionInfo[0].Trim()
+$windowsVersion = $versionInfo[1].Trim()
 $binaryName = "PicaGo"
 $stableWindowsBinaryPath = Join-Path (Join-Path $projectRoot $OutputDir) "PicaGo.exe"
 $ldflagsBase = @(
@@ -148,7 +117,7 @@ foreach ($target in $Targets) {
     $env:GOARCH = $goarch
     if ($goos -eq "windows") {
         $ldflags += @("-H", "windowsgui")
-        $generatedResources += New-WindowsResource -ProjectRoot $projectRoot -Goarch $goarch -ResolvedVersion $resolvedVersion -OriginalFilename $artifact
+        $generatedResources += New-WindowsResource -ProjectRoot $projectRoot -Goarch $goarch -ResolvedVersion $resolvedVersion -WindowsVersion $windowsVersion -OriginalFilename $artifact
     }
 
     Write-Host " -> $target"
@@ -167,17 +136,6 @@ foreach ($target in $Targets) {
     if ($goos -eq "windows" -and $goarch -eq "amd64") {
         Copy-Item -LiteralPath $outputPath -Destination $stableWindowsBinaryPath -Force
     }
-}
-
-function Get-WindowsVersion {
-    param([string]$ResolvedVersion)
-
-    $numbers = [regex]::Matches($ResolvedVersion, '\d+') | ForEach-Object { [int]$_.Value }
-    $parts = @(0, 0, 0, 0)
-    for ($i = 0; $i -lt [Math]::Min(4, $numbers.Count); $i++) {
-        $parts[$i] = [Math]::Min(65535, $numbers[$i])
-    }
-    return $parts
 }
 
 Remove-Item Env:GOOS -ErrorAction SilentlyContinue
