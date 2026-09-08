@@ -100,6 +100,25 @@ func TestThumbnailRevealOffsetMovesUpAsOpacityIncreases(t *testing.T) {
 	}
 }
 
+func TestThumbnailFrameSpansWindowAndFollowsRevealOffset(t *testing.T) {
+	hidden := thumbnailFrameRect(1000, 700, 0)
+	halfVisible := thumbnailFrameRect(1000, 700, 0.5)
+	visible := thumbnailFrameRect(1000, 700, 1)
+
+	if visible.Min.X != 0 || visible.Max.X != 1000 {
+		t.Fatalf("visible frame horizontal bounds = %v, want full window width", visible)
+	}
+	if visible.Max.Y != 700 || visible.Dy() != thumbnailSizeAtX(0)+2*thumbnailBottomMargin {
+		t.Fatalf("visible frame bounds = %v, want bottom-aligned thumbnail frame", visible)
+	}
+	if got := hidden.Min.Y - visible.Min.Y; got != thumbnailRevealSlideDistance {
+		t.Fatalf("hidden frame offset = %d, want %d", got, thumbnailRevealSlideDistance)
+	}
+	if got := halfVisible.Min.Y - visible.Min.Y; got != thumbnailRevealSlideDistance/2 {
+		t.Fatalf("half-visible frame offset = %d, want %d", got, thumbnailRevealSlideDistance/2)
+	}
+}
+
 func TestThumbnailRectsUseFormulaAndRemainSymmetric(t *testing.T) {
 	current := thumbnailRect(1000, 700, 0)
 	previousRight := current

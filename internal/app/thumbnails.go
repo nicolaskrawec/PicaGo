@@ -2,11 +2,13 @@ package app
 
 import (
 	stdimage "image"
+	"image/color"
 	"math"
 	"path/filepath"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	imagedata "viewergo/internal/image"
 )
@@ -20,6 +22,7 @@ const (
 	thumbnailMaxRadius     = 8
 	thumbnailPreloadRadius = 16
 	thumbnailMoveDuration  = 280 * time.Millisecond
+	thumbnailFrameAlpha    = 50
 )
 
 type thumbnailResult struct {
@@ -474,6 +477,7 @@ func (v *Viewer) drawThumbnailStrip(screen *ebiten.Image) {
 	if len(items) == 0 {
 		return
 	}
+	v.drawThumbnailFrame(screen)
 
 	for _, item := range items {
 		if !item.current {
@@ -486,6 +490,32 @@ func (v *Viewer) drawThumbnailStrip(screen *ebiten.Image) {
 			break
 		}
 	}
+}
+
+func (v *Viewer) drawThumbnailFrame(screen *ebiten.Image) {
+	bounds := thumbnailFrameRect(v.windowWidth, v.windowHeight, v.thumbnailOpacity)
+	if bounds.Empty() {
+		return
+	}
+	alpha := uint8(math.Round(thumbnailFrameAlpha * clampFloat64(v.thumbnailOpacity, 0, 1)))
+	vector.FillRect(
+		screen,
+		float32(bounds.Min.X),
+		float32(bounds.Min.Y),
+		float32(bounds.Dx()),
+		float32(bounds.Dy()),
+		color.NRGBA{0, 0, 0, alpha},
+		false,
+	)
+}
+
+func thumbnailFrameRect(windowWidth, windowHeight int, opacity float64) stdimage.Rectangle {
+	if windowWidth <= 0 || windowHeight <= 0 {
+		return stdimage.Rectangle{}
+	}
+	frameHeight := thumbnailSizeAtX(0) + 2*thumbnailBottomMargin
+	revealOffset := thumbnailRevealOffset(opacity)
+	return stdimage.Rect(0, windowHeight-frameHeight+revealOffset, windowWidth, windowHeight+revealOffset)
 }
 
 func (v *Viewer) drawThumbnailItem(screen *ebiten.Image, item thumbnailItem, now time.Time) {
