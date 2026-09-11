@@ -284,6 +284,9 @@ func (v *Viewer) animateView() {
 }
 
 func (v *Viewer) shouldStayActive(now time.Time, mouseMoved, leftMousePressed, rightMousePressed bool) bool {
+	if v.imageA.IsAnimated() || v.imageB.IsAnimated() {
+		return true
+	}
 	if v.slideshowPlaying {
 		return true
 	}

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	stddraw "image"
-	_ "image/gif"
 	stdjpeg "image/jpeg"
 	_ "image/png"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/tiff"
@@ -41,6 +41,7 @@ type LoadedImage struct {
 	HasTransparency bool
 	EXIF            []EXIFTag
 	GPUTexture      *ebiten.Image
+	animation       *loadedAnimation
 }
 
 type DecodedImage struct {
@@ -54,7 +55,11 @@ type DecodedImage struct {
 	Image           stddraw.Image
 	// Preview is deliberately kept separate from Image: it can be uploaded to
 	// the GPU quickly while the full-resolution texture is deferred.
-	Preview stddraw.Image
+	Preview                stddraw.Image
+	AnimationFrames        []stddraw.Image
+	AnimationPreviewFrames []stddraw.Image
+	AnimationDelays        []time.Duration
+	AnimationLoopCount     int
 }
 
 // Release drops the CPU-side image references immediately. The memory is
@@ -66,6 +71,9 @@ func (decoded *DecodedImage) Release() {
 	}
 	decoded.Image = nil
 	decoded.Preview = nil
+	decoded.AnimationFrames = nil
+	decoded.AnimationPreviewFrames = nil
+	decoded.AnimationDelays = nil
 }
 
 func LoadFile(path string) (*LoadedImage, error) {
@@ -233,6 +241,9 @@ func decodeFromReader(reader io.Reader, fileName, filePath string, maxDimension 
 		}
 		return decoded, err
 	}
+	if strings.EqualFold(filepath.Ext(fileName), ".gif") {
+		return decodeGIF(reader, fileName, filePath, maxDimension, exif)
+	}
 
 	decoded, _, err := stddraw.Decode(reader)
 	if err != nil {
@@ -380,6 +391,7 @@ func decodePreviewFromReader(reader io.Reader, fileName, filePath string, maxDim
 		decoded.Preview = decoded.Image
 	}
 	decoded.Image = nil
+	decoded.AnimationFrames = nil
 	return decoded, nil
 }
 
@@ -405,7 +417,7 @@ func NewLoadedImage(decoded *DecodedImage) *LoadedImage {
 		return nil
 	}
 
-	return &LoadedImage{
+	loaded := &LoadedImage{
 		FileName:        decoded.FileName,
 		FilePath:        decoded.FilePath,
 		DecodeMethod:    decoded.DecodeMethod,
@@ -415,6 +427,8 @@ func NewLoadedImage(decoded *DecodedImage) *LoadedImage {
 		EXIF:            decoded.EXIF,
 		GPUTexture:      ebiten.NewImageFromImage(decoded.Image),
 	}
+	loaded.installAnimation(decoded.AnimationFrames, decoded.AnimationDelays, decoded.AnimationLoopCount)
+	return loaded
 }
 
 func NewLoadedPreviewImage(decoded *DecodedImage) *LoadedImage {
@@ -425,7 +439,7 @@ func NewLoadedPreviewImage(decoded *DecodedImage) *LoadedImage {
 	if textureSource == nil {
 		textureSource = decoded.Image
 	}
-	return &LoadedImage{
+	loaded := &LoadedImage{
 		FileName: decoded.FileName, FilePath: decoded.FilePath,
 		DecodeMethod: decoded.DecodeMethod,
 		Width:        decoded.Width, Height: decoded.Height,
@@ -433,13 +447,22 @@ func NewLoadedPreviewImage(decoded *DecodedImage) *LoadedImage {
 		EXIF:            decoded.EXIF,
 		GPUTexture:      ebiten.NewImageFromImage(textureSource),
 	}
+	frames := decoded.AnimationPreviewFrames
+	if len(frames) == 0 {
+		frames = decoded.AnimationFrames
+	}
+	loaded.installAnimation(frames, decoded.AnimationDelays, decoded.AnimationLoopCount)
+	return loaded
 }
 
 func (loaded *LoadedImage) Release() {
-	if loaded == nil || loaded.GPUTexture == nil {
+	if loaded == nil {
 		return
 	}
-	loaded.GPUTexture.Deallocate()
+	loaded.releaseAnimation()
+	if loaded.GPUTexture != nil {
+		loaded.GPUTexture.Deallocate()
+	}
 	loaded.GPUTexture = nil
 }
 
@@ -455,11 +478,12 @@ func UpgradeLoadedImage(loaded *LoadedImage, decoded *DecodedImage) {
 	if loaded == nil || decoded == nil || decoded.Image == nil {
 		return
 	}
-	texture := ebiten.NewImageFromImage(decoded.Image)
+	loaded.releaseAnimation()
 	if loaded.GPUTexture != nil {
 		loaded.GPUTexture.Deallocate()
 	}
-	loaded.GPUTexture = texture
+	loaded.GPUTexture = ebiten.NewImageFromImage(decoded.Image)
+	loaded.installAnimation(decoded.AnimationFrames, decoded.AnimationDelays, decoded.AnimationLoopCount)
 }
 
 // NewLoadedPreviewCopy creates a GPU-only, screen-sized copy of an already

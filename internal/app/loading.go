@@ -231,6 +231,7 @@ func (v *Viewer) localizedImageError(err error) string {
 func (v *Viewer) applyLoadedImage(slot asyncImageSlot, loaded *imagedata.LoadedImage, resetView, animateFit, activateFit bool, loadFull imageDecodeFunc) {
 
 	v.loadError = ""
+	loaded.RestartAnimation(time.Now())
 	v.pendingHighRes[slot] = nil
 	if slot == asyncImageSlotA {
 		fromPath := ""

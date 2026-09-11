@@ -24,6 +24,8 @@ func (v *Viewer) Update() error {
 	v.collectThumbnails()
 	v.ensureVisibleThumbnails()
 	v.updateThumbnailAnimation(now)
+	v.imageA.UpdateAnimation(now)
+	v.imageB.UpdateAnimation(now)
 
 	if v.pendingInitialBorderless {
 		v.enterFromNativeMaximize = false
