@@ -10,7 +10,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	imagedata "viewergo/internal/image"
+	imagedata "github.com/nicolaskrawec/PicaGo/internal/image"
 )
 
 type imageSortMode int

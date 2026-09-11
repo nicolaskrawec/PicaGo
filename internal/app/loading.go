@@ -12,8 +12,8 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	imagedata "viewergo/internal/image"
-	"viewergo/internal/render"
+	imagedata "github.com/nicolaskrawec/PicaGo/internal/image"
+	"github.com/nicolaskrawec/PicaGo/internal/render"
 )
 
 func (v *Viewer) startAsyncImageFileLoad(path string, slot asyncImageSlot, resetView, animateFit bool) {

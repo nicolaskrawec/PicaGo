@@ -1,4 +1,4 @@
-module viewergo
+module github.com/nicolaskrawec/PicaGo
 
 go 1.26.4
 

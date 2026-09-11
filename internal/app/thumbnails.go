@@ -10,7 +10,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
-	imagedata "viewergo/internal/image"
+	imagedata "github.com/nicolaskrawec/PicaGo/internal/image"
 )
 
 const (

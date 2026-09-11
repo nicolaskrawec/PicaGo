@@ -93,7 +93,7 @@ $stableWindowsBinaryPath = Join-Path (Join-Path $projectRoot $OutputDir) "PicaGo
 $ldflagsBase = @(
     "-s",
     "-w",
-    "-X", "viewergo/internal/app.Version=$resolvedVersion"
+    "-X", "github.com/nicolaskrawec/PicaGo/internal/app.Version=$resolvedVersion"
 )
 
 New-Item -ItemType Directory -Force -Path (Join-Path $projectRoot $OutputDir) | Out-Null

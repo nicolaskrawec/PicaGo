@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"viewergo/internal/app"
+	"github.com/nicolaskrawec/PicaGo/internal/app"
 )
 
 func main() {

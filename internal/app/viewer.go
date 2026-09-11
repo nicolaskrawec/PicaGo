@@ -16,11 +16,11 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
-	"viewergo/internal/assets"
-	"viewergo/internal/compare"
-	"viewergo/internal/i18n"
-	imagedata "viewergo/internal/image"
-	"viewergo/internal/render"
+	"github.com/nicolaskrawec/PicaGo/internal/assets"
+	"github.com/nicolaskrawec/PicaGo/internal/compare"
+	"github.com/nicolaskrawec/PicaGo/internal/i18n"
+	imagedata "github.com/nicolaskrawec/PicaGo/internal/image"
+	"github.com/nicolaskrawec/PicaGo/internal/render"
 )
 
 type displayMode int

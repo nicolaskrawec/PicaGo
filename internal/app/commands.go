@@ -9,9 +9,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
-	"viewergo/internal/compare"
-	imagedata "viewergo/internal/image"
-	"viewergo/internal/input"
+	"github.com/nicolaskrawec/PicaGo/internal/compare"
+	imagedata "github.com/nicolaskrawec/PicaGo/internal/image"
+	"github.com/nicolaskrawec/PicaGo/internal/input"
 )
 
 func (v *Viewer) Update() error {

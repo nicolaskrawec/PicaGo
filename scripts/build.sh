@@ -101,7 +101,7 @@ for target in $targets; do
     goarch="${target##*/}"
     suffix=""
     artifact=""
-    ldflags="-s -w -X viewergo/internal/app.Version=$resolved_version"
+    ldflags="-s -w -X github.com/nicolaskrawec/PicaGo/internal/app.Version=$resolved_version"
 
     if [[ "$goos" == "windows" ]]; then
         suffix=".exe"

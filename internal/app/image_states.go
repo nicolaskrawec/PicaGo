@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"viewergo/internal/render"
+	"github.com/nicolaskrawec/PicaGo/internal/render"
 )
 
 const imageStatesFileName = "image-views.json"

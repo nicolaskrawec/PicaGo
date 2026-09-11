@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	imagedata "viewergo/internal/image"
+	imagedata "github.com/nicolaskrawec/PicaGo/internal/image"
 )
 
 func TestCurrentThumbnailRemainsCentered(t *testing.T) {

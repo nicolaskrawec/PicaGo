@@ -6,11 +6,11 @@
 
 Browse, inspect, and compare images without toolbars getting in the way.
 
-[![Latest release](https://img.shields.io/github/v/release/nicolaskrawec/ViewerGo?display_name=tag&sort=semver)](https://github.com/nicolaskrawec/ViewerGo/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/nicolaskrawec/PicaGo?display_name=tag&sort=semver)](https://github.com/nicolaskrawec/PicaGo/releases/latest)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-5b8def)
 ![Formats](https://img.shields.io/badge/formats-JPEG%20%7C%20PNG%20%7C%20GIF%20%7C%20WebP%20%7C%20BMP%20%7C%20TIFF-69b578)
 
-[Download the latest release](https://github.com/nicolaskrawec/ViewerGo/releases/latest) · [View all releases](https://github.com/nicolaskrawec/ViewerGo/releases)
+[Download the latest release](https://github.com/nicolaskrawec/PicaGo/releases/latest) · [View all releases](https://github.com/nicolaskrawec/PicaGo/releases)
 
 </div>
 
@@ -30,7 +30,7 @@ It is equally at home browsing a photo collection, checking a retouch against th
 
 ## Getting started
 
-1. Download PicaGo for your platform from the [Releases page](https://github.com/nicolaskrawec/ViewerGo/releases/latest).
+1. Download PicaGo for your platform from the [Releases page](https://github.com/nicolaskrawec/PicaGo/releases/latest).
 2. Open an image with PicaGo, or launch the app and drag an image into its window.
 3. Use the **Left** and **Right Arrow** keys to browse the rest of the folder.
 4. Move the pointer near the bottom edge to reveal the thumbnail strip.

@@ -7,7 +7,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"viewergo/internal/render"
+	"github.com/nicolaskrawec/PicaGo/internal/render"
 )
 
 const openingAnimationDuration = 500 * time.Millisecond

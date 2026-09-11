@@ -6,8 +6,8 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"viewergo/internal/compare"
-	"viewergo/internal/render"
+	"github.com/nicolaskrawec/PicaGo/internal/compare"
+	"github.com/nicolaskrawec/PicaGo/internal/render"
 )
 
 func (v *Viewer) resetFit() {

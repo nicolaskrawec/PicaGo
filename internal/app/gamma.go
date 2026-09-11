@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"viewergo/internal/render"
+	"github.com/nicolaskrawec/PicaGo/internal/render"
 )
 
 const (

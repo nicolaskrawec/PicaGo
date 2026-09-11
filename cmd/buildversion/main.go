@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"viewergo/internal/buildversion"
+	"github.com/nicolaskrawec/PicaGo/internal/buildversion"
 )
 
 func main() {

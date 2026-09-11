@@ -8,7 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
-	imagedata "viewergo/internal/image"
+	imagedata "github.com/nicolaskrawec/PicaGo/internal/image"
 )
 
 // DrawComparisonImage draws B with the exact scale and center used by the

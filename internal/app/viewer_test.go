@@ -8,10 +8,10 @@ import (
 	"testing/fstest"
 	"time"
 
-	"viewergo/internal/compare"
-	"viewergo/internal/i18n"
-	imagedata "viewergo/internal/image"
-	"viewergo/internal/render"
+	"github.com/nicolaskrawec/PicaGo/internal/compare"
+	"github.com/nicolaskrawec/PicaGo/internal/i18n"
+	imagedata "github.com/nicolaskrawec/PicaGo/internal/image"
+	"github.com/nicolaskrawec/PicaGo/internal/render"
 )
 
 func TestRunPrintsVersionWithoutStartingViewer(t *testing.T) {
