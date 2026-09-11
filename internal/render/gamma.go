@@ -45,7 +45,9 @@ func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 	fragment.rgb *= exp2(vec3(Exposure))
 	fragment.rgb = (fragment.rgb - vec3(0.5)) * Contrast + vec3(0.5)
 	correction := vec3(1.0 / Gamma)
-	fragment.rgb = pow(fragment.rgb, correction)
+	// Contrast can push dark channels below zero. Fractional powers require
+	// a non-negative base; preserve positive highlights until composition.
+	fragment.rgb = pow(max(fragment.rgb, vec3(0)), correction)
 	if MaskEnabled > 0.5 && distance(position.xy, MaskCenter) > MaskRadius {
 		return vec4(0)
 	}
