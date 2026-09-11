@@ -193,6 +193,9 @@ func (v *Viewer) applyAsyncImageLoad(result asyncImageResult) {
 
 	if result.err != nil {
 		result.decoded.Release()
+		if result.slot == asyncImageSlotA {
+			v.centerComparisonOnNextImageA = false
+		}
 		v.loadError = v.localizedImageError(result.err)
 		ebiten.SetWindowTitle(windowTitle(v.text("status.load_failed")))
 		return
@@ -288,9 +291,17 @@ func (v *Viewer) applyLoadedImage(slot asyncImageSlot, loaded *imagedata.LoadedI
 	case asyncImageSlotA:
 		oldLoaded = v.imageA
 		v.imageA = loaded
+		if v.centerComparisonOnNextImageA {
+			v.resetToCenteredVerticalComparison()
+			v.centerComparisonOnNextImageA = false
+		}
 		v.fullscreenZoomRestoreValid = false
 		if v.imageB == nil {
 			v.mode = displayModeSingleA
+		} else {
+			// B can finish decoding first when two files are dropped into an
+			// empty viewer. Enter comparison as soon as A completes too.
+			v.mode = displayModeCompare
 		}
 		v.circleMaskDiameter = defaultCircleMaskDiameterRatio
 		if activateFit && !restoreSessionView {

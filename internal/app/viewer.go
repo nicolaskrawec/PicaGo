@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -164,28 +165,29 @@ type Viewer struct {
 	zoomKeyRepeatAt         time.Time
 	zoomKeyStopAt100        bool
 
-	windowWidth           int
-	windowHeight          int
-	slider                compare.Slider
-	sliderInitialized     bool
-	sliderOpacity         float64
-	compareMaskAlpha      float64
-	circleBorderOpacity   float64
-	showShadow            bool
-	showHelp              bool
-	showEXIF              bool
-	compareMask           compareMaskMode
-	circleMaskDiameter    float64
-	lastCompareBorderAt   time.Time
-	reverseCompare        bool
-	syncSliderWithImage   bool
-	sliderSyncRatio       float64
-	pendingSliderRestore  bool
-	sliderBaseWidth       int
-	sliderBaseHeight      int
-	pendingViewportRebase bool
-	viewportBaseWidth     int
-	viewportBaseHeight    int
+	windowWidth                  int
+	windowHeight                 int
+	slider                       compare.Slider
+	sliderInitialized            bool
+	sliderOpacity                float64
+	compareMaskAlpha             float64
+	circleBorderOpacity          float64
+	showShadow                   bool
+	showHelp                     bool
+	showEXIF                     bool
+	compareMask                  compareMaskMode
+	circleMaskDiameter           float64
+	lastCompareBorderAt          time.Time
+	reverseCompare               bool
+	centerComparisonOnNextImageA bool
+	syncSliderWithImage          bool
+	sliderSyncRatio              float64
+	pendingSliderRestore         bool
+	sliderBaseWidth              int
+	sliderBaseHeight             int
+	pendingViewportRebase        bool
+	viewportBaseWidth            int
+	viewportBaseHeight           int
 
 	borderlessMaximized        bool
 	pendingInitialBorderless   bool
@@ -263,6 +265,7 @@ type Viewer struct {
 	prefetchAfterHighRes       *imagedata.LoadedImage
 	navigationDirectory        string
 	navigationImages           []string
+	navigationFS               fs.FS
 	folderSortModes            map[string]imageSortMode
 	imageViewStates            map[string]render.View
 	// Zoom and position are intentionally kept separately from

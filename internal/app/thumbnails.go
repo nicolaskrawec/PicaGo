@@ -384,9 +384,16 @@ func (v *Viewer) startThumbnailLoad(path string) {
 		return
 	}
 	v.thumbnailInFlight[path] = true
+	droppedFS := v.droppedFolderFSForPath(path)
 	go func() {
 		v.decodeSlots <- struct{}{}
-		thumbnail, err := imagedata.DecodeFileThumbnail(path, thumbnailMaxDimension)
+		var thumbnail stdimage.Image
+		var err error
+		if droppedFS != nil {
+			thumbnail, err = imagedata.DecodeFSThumbnail(droppedFS, path, thumbnailMaxDimension)
+		} else {
+			thumbnail, err = imagedata.DecodeFileThumbnail(path, thumbnailMaxDimension)
+		}
 		<-v.decodeSlots
 		v.thumbnailResults <- thumbnailResult{path: path, image: thumbnail, err: err}
 		ebiten.ScheduleFrame()

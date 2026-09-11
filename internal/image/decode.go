@@ -135,6 +135,23 @@ func DecodeFileThumbnail(path string, maxDimension int) (stddraw.Image, error) {
 	return thumbnail, nil
 }
 
+// DecodeFSThumbnail is the fs.FS counterpart of DecodeFileThumbnail. It is
+// used for folders received through drag and drop, whose files are not always
+// exposed as ordinary operating-system paths.
+func DecodeFSThumbnail(fsys fs.FS, path string, maxDimension int) (stddraw.Image, error) {
+	decoded, err := DecodeFSForDisplay(fsys, path, maxDimension)
+	if err != nil {
+		return nil, err
+	}
+	thumbnail := decoded.Preview
+	if thumbnail == nil {
+		thumbnail = decoded.Image
+	}
+	decoded.Image = nil
+	decoded.Preview = nil
+	return thumbnail, nil
+}
+
 func LoadFS(fsys fs.FS, path string) (*LoadedImage, error) {
 	decoded, err := DecodeFS(fsys, path)
 	if err != nil {

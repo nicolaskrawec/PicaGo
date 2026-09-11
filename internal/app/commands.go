@@ -47,6 +47,7 @@ func (v *Viewer) Update() error {
 		animateImageA := v.imageA == nil
 		var droppedImages []string
 		var firstDroppedImage string
+		var droppedFolder string
 		_ = fs.WalkDir(dropped, ".", func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
@@ -55,6 +56,9 @@ func (v *Viewer) Update() error {
 				return nil
 			}
 			if d.IsDir() {
+				if droppedFolder == "" {
+					droppedFolder = path
+				}
 				// Keep the old folder-drop fallback below, but do not mix files
 				// from a dropped directory with two explicitly dropped files.
 				return fs.SkipDir
@@ -69,34 +73,22 @@ func (v *Viewer) Update() error {
 		})
 
 		if len(droppedImages) >= 2 {
+			v.clearDroppedFolderNavigation()
+			v.prepareTwoImageDropComparison()
 			v.startAsyncImageFSLoad(dropped, droppedImages[0], asyncImageSlotA, true, animateImageA)
 			v.startAsyncImageFSLoad(dropped, droppedImages[1], asyncImageSlotB, false, false)
 		} else if firstDroppedImage != "" {
+			v.clearDroppedFolderNavigation()
 			if dropSlot == asyncImageSlotA {
 				v.startAsyncImageFSLoad(dropped, firstDroppedImage, asyncImageSlotA, true, animateImageA)
 			} else {
 				v.startAsyncImageFSLoad(dropped, firstDroppedImage, asyncImageSlotB, false, false)
 			}
-		} else {
-			// A dropped directory is handled as before: use its first supported
-			// image, found recursively.
-			_ = fs.WalkDir(dropped, ".", func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					return nil
-				}
-				if d.IsDir() {
-					return nil
-				}
-				if imagedata.IsSupportedFile(path) {
-					if dropSlot == asyncImageSlotA {
-						v.startAsyncImageFSLoad(dropped, path, asyncImageSlotA, true, animateImageA)
-					} else {
-						v.startAsyncImageFSLoad(dropped, path, asyncImageSlotB, false, false)
-					}
-					return fs.SkipAll
-				}
-				return nil
-			})
+		} else if droppedFolder != "" {
+			images := v.setDroppedFolderNavigation(dropped, droppedFolder)
+			if len(images) > 0 {
+				v.startAsyncImageFSLoad(dropped, images[0], asyncImageSlotA, true, animateImageA)
+			}
 		}
 	}
 

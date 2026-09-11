@@ -45,6 +45,23 @@ func (v *Viewer) setSliderOrientation(orientation compare.Orientation) {
 	v.ensureSliderPosition()
 }
 
+// prepareTwoImageDropComparison makes a grouped drop start in the default
+// comparison view. Repeat the reset when A arrives because an existing image
+// can still be drawn (and initialize the slider) while the new files decode.
+func (v *Viewer) prepareTwoImageDropComparison() {
+	v.centerComparisonOnNextImageA = true
+	v.resetToCenteredVerticalComparison()
+}
+
+func (v *Viewer) resetToCenteredVerticalComparison() {
+	v.compareMask = compareMaskSplit
+	v.slider.Orientation = compare.OrientationVertical
+	v.slider.Position = 0
+	v.sliderInitialized = false
+	v.reverseCompare = false
+	v.markCompareBorderActivity(time.Now())
+}
+
 func (v *Viewer) setCompareOrientation(orientation compare.Orientation) {
 	v.markCompareBorderActivity(time.Now())
 	wasCircle := v.compareMask == compareMaskCircle

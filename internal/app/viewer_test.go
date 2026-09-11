@@ -5,6 +5,7 @@ import (
 	"image"
 	"math"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"viewergo/internal/compare"
@@ -351,6 +352,61 @@ func TestImageDropSlotUsesWindowCenter(t *testing.T) {
 		if got := v.imageDropSlot(test.x); got != test.want {
 			t.Errorf("drop at x=%d targets slot %v, want %v", test.x, got, test.want)
 		}
+	}
+}
+
+func TestTwoImageDropPreparesCenteredVerticalComparison(t *testing.T) {
+	v := Viewer{
+		compareMask:       compareMaskCircle,
+		reverseCompare:    true,
+		sliderInitialized: true,
+		slider: compare.Slider{
+			Orientation: compare.OrientationHorizontal,
+			Position:    123,
+		},
+	}
+
+	v.prepareTwoImageDropComparison()
+
+	if v.compareMask != compareMaskSplit {
+		t.Fatalf("comparison mask = %v, want split", v.compareMask)
+	}
+	if v.slider.Orientation != compare.OrientationVertical {
+		t.Fatalf("slider orientation = %v, want vertical", v.slider.Orientation)
+	}
+	if v.sliderInitialized || v.slider.Position != 0 {
+		t.Fatalf("slider was not reset for centering: %+v", v.slider)
+	}
+	if v.reverseCompare {
+		t.Fatal("grouped drop kept the reversed comparison")
+	}
+	if !v.centerComparisonOnNextImageA {
+		t.Fatal("grouped drop did not schedule centering for the asynchronously loaded image A")
+	}
+}
+
+func TestDroppedFolderNavigationIncludesOnlyDirectImages(t *testing.T) {
+	dropped := fstest.MapFS{
+		"album/z.png":         {},
+		"album/a.jpg":         {},
+		"album/notes.txt":     {},
+		"album/nested/b.webp": {},
+	}
+	v := Viewer{folderSortModes: make(map[string]imageSortMode)}
+
+	images := v.setDroppedFolderNavigation(dropped, "album")
+	want := []string{"album/a.jpg", "album/z.png"}
+	if len(images) != len(want) {
+		t.Fatalf("folder images = %v, want %v", images, want)
+	}
+	for i := range want {
+		if images[i] != want[i] {
+			t.Fatalf("folder images = %v, want %v", images, want)
+		}
+	}
+	paths, current, err := v.navigationImagePaths("album/z.png")
+	if err != nil || current != 1 || len(paths) != 2 {
+		t.Fatalf("dropped navigation paths = %v, current = %d, err = %v", paths, current, err)
 	}
 }
 

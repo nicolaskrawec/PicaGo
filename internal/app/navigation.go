@@ -1,7 +1,9 @@
 package app
 
 import (
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"time"
@@ -130,8 +132,12 @@ func (v *Viewer) cycleImageSort() {
 
 	// Rebuild the current directory immediately. The current image is found
 	// again in the reordered list, so changing the order never changes it.
-	v.navigationDirectory = ""
-	v.navigationImages = nil
+	if v.navigationFS != nil && v.isDroppedFolderPath(v.imageA.FilePath) {
+		v.setDroppedFolderNavigation(v.navigationFS, v.navigationDirectory)
+	} else {
+		v.navigationDirectory = ""
+		v.navigationImages = nil
+	}
 	v.stopThumbnailAnimation()
 	v.prefetchAdjacentImages()
 	v.showCenterInfo("notification.sort", v.text(mode.translationKey()))
@@ -174,21 +180,88 @@ func (v *Viewer) navigationImagePathsForSlideshow() ([]string, int, error) {
 }
 
 func (v *Viewer) loadNavigationImage(nextPath string) {
+	droppedFS := v.droppedFolderFSForPath(nextPath)
 	if loaded := v.takePrefetchedImage(nextPath); loaded != nil {
 		// Invalidate an older asynchronous navigation result before applying
 		// the cached image immediately.
 		v.trackPendingImageLoad(asyncImageSlotA, 0)
 		v.loadingImageName = ""
 		v.applyLoadedImage(asyncImageSlotA, loaded, true, false, true, func() (*imagedata.DecodedImage, error) {
+			if droppedFS != nil {
+				return imagedata.DecodeFS(droppedFS, nextPath)
+			}
 			return imagedata.DecodeFile(nextPath)
 		})
 		return
 	}
 
-	v.startAsyncImageFileLoad(nextPath, asyncImageSlotA, true, false)
+	if droppedFS != nil {
+		v.startAsyncImageFSLoad(droppedFS, nextPath, asyncImageSlotA, true, false)
+	} else {
+		v.startAsyncImageFileLoad(nextPath, asyncImageSlotA, true, false)
+	}
+}
+
+func (v *Viewer) setDroppedFolderNavigation(fsys fs.FS, dir string) []string {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		v.clearDroppedFolderNavigation()
+		return nil
+	}
+	items := make([]navigationImage, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !imagedata.IsSupportedFile(entry.Name()) {
+			continue
+		}
+		item := navigationImage{path: path.Join(dir, entry.Name()), name: entry.Name()}
+		if info, infoErr := entry.Info(); infoErr == nil {
+			item.modifiedTime = info.ModTime()
+		}
+		items = append(items, item)
+	}
+	sortNavigationImages(items, v.currentImageSortMode(dir))
+	v.navigationDirectory = dir
+	v.navigationImages = make([]string, len(items))
+	for i, item := range items {
+		v.navigationImages[i] = item.path
+	}
+	v.navigationFS = fsys
+	return v.navigationImages
+}
+
+func (v *Viewer) clearDroppedFolderNavigation() {
+	v.navigationFS = nil
+	v.navigationDirectory = ""
+	v.navigationImages = nil
+}
+
+func (v *Viewer) isDroppedFolderPath(path string) bool {
+	if v.navigationFS == nil {
+		return false
+	}
+	for _, candidate := range v.navigationImages {
+		if candidate == path {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *Viewer) droppedFolderFSForPath(path string) fs.FS {
+	if v.isDroppedFolderPath(path) {
+		return v.navigationFS
+	}
+	return nil
 }
 
 func (v *Viewer) navigationImagePaths(filePath string) ([]string, int, error) {
+	if v.isDroppedFolderPath(filePath) {
+		for index, path := range v.navigationImages {
+			if path == filePath {
+				return v.navigationImages, index, nil
+			}
+		}
+	}
 	dir := filepath.Dir(filePath)
 	currentName := filepath.Base(filePath)
 
@@ -272,9 +345,16 @@ func (v *Viewer) startPrefetch(path string) {
 	}
 	v.prefetchInFlight[path] = true
 	maxDimension := v.previewDimension()
+	droppedFS := v.droppedFolderFSForPath(path)
 	go func() {
 		v.decodeSlots <- struct{}{}
-		decoded, err := imagedata.DecodeFileForDisplay(path, maxDimension)
+		var decoded *imagedata.DecodedImage
+		var err error
+		if droppedFS != nil {
+			decoded, err = imagedata.DecodeFSForDisplay(droppedFS, path, maxDimension)
+		} else {
+			decoded, err = imagedata.DecodeFileForDisplay(path, maxDimension)
+		}
 		<-v.decodeSlots
 		v.prefetchResults <- prefetchedImageResult{path: path, decoded: decoded, err: err}
 		ebiten.ScheduleFrame()
