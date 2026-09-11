@@ -100,6 +100,7 @@ jobs:
             -OutputDir "dist/windows" `
             -InstallerOutputDir "dist/release"
           Copy-Item dist/windows/PicaGo.exe "dist/release/PicaGo-$env:RELEASE_VERSION-windows-amd64.exe"
+          Copy-Item THIRD_PARTY_NOTICES.txt dist/release/THIRD_PARTY_NOTICES.txt
 
       - name: Install WiX Toolset
         shell: pwsh
@@ -164,6 +165,8 @@ jobs:
           convert 'internal/assets/icon.ico[0]' -resize 256x256 \
             "$package_root/usr/share/icons/hicolor/256x256/apps/picago.png"
           install -Dm644 packaging/linux/control "$package_root/DEBIAN/control"
+          install -Dm644 THIRD_PARTY_NOTICES.txt \
+            "$package_root/usr/share/doc/picago/THIRD_PARTY_NOTICES.txt"
           sed -i "s/@VERSION@/$RELEASE_VERSION/" "$package_root/DEBIAN/control"
           mkdir -p dist/release
           dpkg-deb --build --root-owner-group "$package_root" \
@@ -210,6 +213,7 @@ jobs:
             -ldflags "-s -w -X viewergo/internal/app.Version=$RELEASE_VERSION" \
             -o "$app/Contents/MacOS/PicaGo" .
           cp packaging/macos/Info.plist "$app/Contents/Info.plist"
+          cp THIRD_PARTY_NOTICES.txt "$app/Contents/Resources/THIRD_PARTY_NOTICES.txt"
           /usr/libexec/PlistBuddy -c \
             "Set :CFBundleShortVersionString $RELEASE_VERSION" "$app/Contents/Info.plist"
           bundle_version="${WINDOWS_VERSION%.*}"

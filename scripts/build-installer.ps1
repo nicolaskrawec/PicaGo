@@ -70,6 +70,12 @@ if (-not (Test-Path $configTemplate)) {
 }
 Copy-Item -LiteralPath $configTemplate -Destination (Join-Path $outputDirAbsolute "PicaGo.json") -Force
 
+$thirdPartyNotices = Join-Path $projectRoot "THIRD_PARTY_NOTICES.txt"
+if (-not (Test-Path $thirdPartyNotices)) {
+    throw "Fichier de mentions legales introuvable: $thirdPartyNotices"
+}
+Copy-Item -LiteralPath $thirdPartyNotices -Destination (Join-Path $outputDirAbsolute "THIRD_PARTY_NOTICES.txt") -Force
+
 New-Item -ItemType Directory -Force -Path $installerOutputAbsolute | Out-Null
 
 $iscc = Get-InnoSetupCompiler

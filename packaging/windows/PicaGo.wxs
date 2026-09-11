@@ -25,6 +25,7 @@
               Advertise="yes" />
           </File>
           <File Id="PicaGoDefaultConfig" Source="$(SourceDir)\PicaGo.json" />
+          <File Id="PicaGoThirdPartyNotices" Source="$(SourceDir)\THIRD_PARTY_NOTICES.txt" />
         </Component>
       </Directory>
     </StandardDirectory>

@@ -53,6 +53,7 @@ Name: "opendefaultapps"; Description: "Ouvrir les reglages Windows des applicati
 [Files]
 Source: "{#BuildDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\PicaGo.json"; DestDir: "{app}"; Flags: onlyifdoesntexist
+Source: "{#BuildDir}\THIRD_PARTY_NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
