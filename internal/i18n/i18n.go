@@ -22,11 +22,29 @@ var localeFiles embed.FS
 
 var supportedLanguages = map[string]struct{}{
 	DefaultLanguage: {},
+	"bg":            {},
+	"cs":            {},
+	"da":            {},
 	"de":            {},
+	"el":            {},
 	"es":            {},
+	"et":            {},
+	"fi":            {},
 	"fr":            {},
+	"ga":            {},
+	"hr":            {},
+	"hu":            {},
 	"it":            {},
+	"lt":            {},
+	"lv":            {},
+	"mt":            {},
+	"nl":            {},
 	"pl":            {},
+	"pt":            {},
+	"ro":            {},
+	"sk":            {},
+	"sl":            {},
+	"sv":            {},
 }
 
 var catalogs = loadCatalogs()

@@ -2,6 +2,25 @@ package i18n
 
 import "testing"
 
+func TestAllSupportedCatalogsAreComplete(t *testing.T) {
+	want := catalogs[DefaultLanguage]
+	for language := range supportedLanguages {
+		catalog, ok := catalogs[language]
+		if !ok {
+			t.Errorf("catalog %q was not loaded", language)
+			continue
+		}
+		for key := range want {
+			if catalog[key] == "" {
+				t.Errorf("catalog %q is missing %q", language, key)
+			}
+		}
+		if len(catalog) != len(want) {
+			t.Errorf("catalog %q has %d entries, want %d", language, len(catalog), len(want))
+		}
+	}
+}
+
 func TestEnglishCatalog(t *testing.T) {
 	localizer := New("en-US")
 	if got := localizer.Language(); got != "en" {
@@ -69,7 +88,7 @@ func TestAutomaticLanguageUsesSupportedSystemLanguage(t *testing.T) {
 }
 
 func TestAutomaticLanguageFallsBackToEnglish(t *testing.T) {
-	if got := resolveLanguage("auto", "nl-NL"); got != "en" {
+	if got := resolveLanguage("auto", "ja-JP"); got != "en" {
 		t.Fatalf("language = %q, want en", got)
 	}
 }

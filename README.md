@@ -142,14 +142,11 @@ PicaGo opens:
 
 ## Languages
 
-PicaGo automatically follows your system language when available. The interface currently includes:
-
-- English
-- French
-- German
-- Italian
-- Spanish
-- Polish
+PicaGo automatically follows your system language when available. The interface
+includes all 24 official languages of the European Union: Bulgarian, Croatian,
+Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek,
+Hungarian, Irish, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese,
+Romanian, Slovak, Slovenian, Spanish, and Swedish.
 
 If your language is not available, PicaGo uses English.
 
