@@ -1,5 +1,13 @@
 package app
 
+import (
+	"fmt"
+	"math"
+	"strings"
+
+	"viewergo/internal/render"
+)
+
 const (
 	defaultGamma = 1.0
 	gammaStep    = 0.1
@@ -10,6 +18,42 @@ const (
 	minContrast  = 0.0
 	maxContrast  = 4.0
 )
+
+func imageAdjustmentsActive(view render.View) bool {
+	gamma := view.Gamma
+	if gamma <= 0 {
+		gamma = defaultGamma
+	}
+	contrast := view.Contrast
+	if contrast <= 0 {
+		contrast = 1
+	}
+	return math.Abs(gamma-defaultGamma) >= 0.001 ||
+		math.Abs(view.Exposure) >= 0.001 ||
+		math.Abs(contrast-1) >= 0.001
+}
+
+func (v *Viewer) imageAdjustmentsSummary(view render.View) string {
+	gamma := view.Gamma
+	if gamma <= 0 {
+		gamma = defaultGamma
+	}
+	contrast := view.Contrast
+	if contrast <= 0 {
+		contrast = 1
+	}
+	adjustments := make([]string, 0, 3)
+	if math.Abs(gamma-defaultGamma) >= 0.001 {
+		adjustments = append(adjustments, fmt.Sprintf("%s %.1f", v.text("adjustment.gamma"), gamma))
+	}
+	if math.Abs(view.Exposure) >= 0.001 {
+		adjustments = append(adjustments, fmt.Sprintf("%s %+.1f", v.text("adjustment.exposure"), view.Exposure))
+	}
+	if math.Abs(contrast-1) >= 0.001 {
+		adjustments = append(adjustments, fmt.Sprintf("%s %.1f", v.text("adjustment.contrast"), contrast))
+	}
+	return v.message("notification.image_adjusted", strings.Join(adjustments, "   "))
+}
 
 func (v *Viewer) adjustGamma(wheelDelta float64) {
 	gamma := v.view.Gamma

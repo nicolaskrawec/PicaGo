@@ -45,6 +45,24 @@ func pointInBottomRightCorner(x, y, width, height, tolerance int) bool {
 	return x >= width-tolerance && x < width && y >= height-tolerance && y < height
 }
 
+func pointNearAnyCorner(x, y, width, height, clearance int) bool {
+	if width <= 0 || height <= 0 || clearance <= 0 || x < 0 || y < 0 || x >= width || y >= height {
+		return false
+	}
+	nearHorizontalEdge := x < clearance || x >= width-clearance
+	nearVerticalEdge := y < clearance || y >= height-clearance
+	return nearHorizontalEdge && nearVerticalEdge
+}
+
+func adjustmentIndicatorRect(windowHeight int) stdimage.Rectangle {
+	const (
+		width  = 32
+		height = 36
+	)
+	centerY := windowHeight / 2
+	return stdimage.Rect(0, centerY-height/2, width, centerY+height/2)
+}
+
 func absInt(value int) int {
 	if value < 0 {
 		return -value

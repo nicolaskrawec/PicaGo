@@ -95,6 +95,8 @@ type highResImageResult struct {
 const idleFrameDelay = 500 * time.Millisecond
 const compareBorderIdleDelay = 600 * time.Millisecond
 const cursorIdleDelay = 2 * time.Second
+const adjustmentIndicatorFadeDuration = 250 * time.Millisecond
+const adjustmentIndicatorCornerClearance = 60
 const cornerCommandTolerance = 25
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
@@ -466,6 +468,7 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	}
 	mouseX, mouseY := ebiten.CursorPosition()
 	v.drawThumbnailStrip(screen)
+	v.drawAdjustmentIndicator(screen, time.Now(), mouseX, mouseY)
 	drawCornerHints(
 		screen,
 		v.windowWidth,
@@ -490,6 +493,45 @@ func (v *Viewer) Draw(screen *ebiten.Image) {
 	}
 }
 
+func (v *Viewer) drawAdjustmentIndicator(screen *ebiten.Image, now time.Time, mouseX, mouseY int) {
+	if v.imageA == nil || !imageAdjustmentsActive(v.view) || pointNearAnyCorner(
+		mouseX, mouseY, v.windowWidth, v.windowHeight, adjustmentIndicatorCornerClearance,
+	) {
+		return
+	}
+	opacity := cursorActivityOpacity(now, v.lastCursorActivityAt)
+	if opacity <= 0 {
+		return
+	}
+
+	const (
+		leftMargin  = float32(12)
+		arm         = float32(4)
+		gap         = float32(4)
+		strokeWidth = float32(1.25)
+	)
+	x := leftMargin + arm
+	y := float32(v.windowHeight) / 2
+	ink := color.NRGBA{R: 255, G: 255, B: 255, A: uint8(math.Round(190 * opacity))}
+	vector.StrokeLine(screen, x-arm, y-gap, x+arm, y-gap, strokeWidth, ink, true)
+	vector.StrokeLine(screen, x, y-gap-arm, x, y-gap+arm, strokeWidth, ink, true)
+	vector.StrokeLine(screen, x-arm, y+gap+arm, x+arm, y+gap+arm, strokeWidth, ink, true)
+}
+
+func cursorActivityOpacity(now, lastActivity time.Time) float64 {
+	if lastActivity.IsZero() {
+		return 0
+	}
+	remaining := cursorIdleDelay - now.Sub(lastActivity)
+	if remaining <= 0 {
+		return 0
+	}
+	if remaining >= adjustmentIndicatorFadeDuration {
+		return 1
+	}
+	return float64(remaining) / float64(adjustmentIndicatorFadeDuration)
+}
+
 func (v *Viewer) text(key string) string {
 	return v.localizer.Text(key)
 }
@@ -499,7 +541,11 @@ func (v *Viewer) message(key string, args ...any) string {
 }
 
 func (v *Viewer) showCenterInfo(key string, args ...any) {
-	v.centerInfoText = v.message(key, args...)
+	v.showCenterInfoText(v.message(key, args...))
+}
+
+func (v *Viewer) showCenterInfoText(text string) {
+	v.centerInfoText = text
 	v.centerInfoUntil = time.Now().Add(900 * time.Millisecond)
 	if v.centerInfoTexture != nil {
 		v.centerInfoTexture.Deallocate()

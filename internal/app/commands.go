@@ -220,6 +220,11 @@ func (v *Viewer) Update() error {
 			v.leftMouseDown = true
 			return nil
 		}
+		if v.imageA != nil && imageAdjustmentsActive(v.view) && pointInRect(mouseX, mouseY, adjustmentIndicatorRect(v.windowHeight)) {
+			v.showCenterInfoText(v.imageAdjustmentsSummary(v.view))
+			v.leftMouseDown = true
+			return nil
+		}
 		// The bottom of the split can overlap the thumbnail strip. Give a
 		// click near the split line priority so the line remains draggable.
 		splitSliderClick := false

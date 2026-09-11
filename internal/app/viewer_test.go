@@ -3,10 +3,12 @@ package app
 import (
 	"bytes"
 	"image"
+	"math"
 	"testing"
 	"time"
 
 	"viewergo/internal/compare"
+	"viewergo/internal/i18n"
 	imagedata "viewergo/internal/image"
 	"viewergo/internal/render"
 )
@@ -45,6 +47,66 @@ func TestCursorBecomesIdleAfterDelay(t *testing.T) {
 	v.lastCursorActivityAt = now.Add(cursorIdleDelay)
 	if v.cursorIdle(now.Add(cursorIdleDelay)) {
 		t.Fatal("new mouse activity did not wake the cursor")
+	}
+}
+
+func TestAdjustmentIndicatorFollowsCursorActivity(t *testing.T) {
+	now := time.Now()
+	if got := cursorActivityOpacity(now, time.Time{}); got != 0 {
+		t.Fatalf("opacity without cursor activity = %v, want 0", got)
+	}
+	if got := cursorActivityOpacity(now, now.Add(-time.Second)); got != 1 {
+		t.Fatalf("opacity while active = %v, want 1", got)
+	}
+	if got := cursorActivityOpacity(now, now.Add(-cursorIdleDelay+adjustmentIndicatorFadeDuration/2)); math.Abs(got-0.5) > 0.001 {
+		t.Fatalf("opacity halfway through fade = %v, want 0.5", got)
+	}
+	if got := cursorActivityOpacity(now, now.Add(-cursorIdleDelay)); got != 0 {
+		t.Fatalf("opacity once idle = %v, want 0", got)
+	}
+}
+
+func TestAdjustmentIndicatorDetectsCorrections(t *testing.T) {
+	if imageAdjustmentsActive(render.View{Gamma: defaultGamma, Contrast: 1}) {
+		t.Fatal("neutral image reported as adjusted")
+	}
+	for _, view := range []render.View{
+		{Gamma: 1.1, Contrast: 1},
+		{Gamma: 1, Exposure: 0.1, Contrast: 1},
+		{Gamma: 1, Contrast: 1.1},
+	} {
+		if !imageAdjustmentsActive(view) {
+			t.Fatalf("correction not detected: %+v", view)
+		}
+	}
+}
+
+func TestAdjustmentIndicatorAvoidsCorners(t *testing.T) {
+	for _, point := range [][2]int{{0, 0}, {59, 59}, {940, 0}, {999, 559}} {
+		if !pointNearAnyCorner(point[0], point[1], 1000, 560, 60) {
+			t.Fatalf("point %v should be inside a corner clearance", point)
+		}
+	}
+	if pointNearAnyCorner(990, 280, 1000, 560, 60) {
+		t.Fatal("middle of right edge should remain available")
+	}
+}
+
+func TestAdjustmentIndicatorHitAreaIsCenteredOnLeftEdge(t *testing.T) {
+	rect := adjustmentIndicatorRect(560)
+	if !pointInRect(16, 280, rect) {
+		t.Fatalf("indicator center is outside hit area: %v", rect)
+	}
+	if pointInRect(33, 280, rect) || pointInRect(16, 299, rect) {
+		t.Fatalf("indicator hit area is too large: %v", rect)
+	}
+}
+
+func TestImageAdjustmentsSummary(t *testing.T) {
+	v := Viewer{localizer: i18n.New("fr")}
+	view := render.View{Gamma: 1.2, Exposure: 0, Contrast: 1.4}
+	if got, want := v.imageAdjustmentsSummary(view), "Image ajustée : Gamma 1.2   Contraste 1.4"; got != want {
+		t.Fatalf("summary = %q, want %q", got, want)
 	}
 }
 
