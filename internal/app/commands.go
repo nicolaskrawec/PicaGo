@@ -210,6 +210,16 @@ func (v *Viewer) Update() error {
 			v.leftMouseDown = true
 			return nil
 		}
+		if pointInBottomLeftCorner(mouseX, mouseY, v.windowHeight, cornerCommandTolerance) {
+			v.toggleScreenMirror(true)
+			v.leftMouseDown = true
+			return nil
+		}
+		if pointInBottomRightCorner(mouseX, mouseY, v.windowWidth, v.windowHeight, cornerCommandTolerance) {
+			v.adjustGamma(1)
+			v.leftMouseDown = true
+			return nil
+		}
 		// The bottom of the split can overlap the thumbnail strip. Give a
 		// click near the split line priority so the line remains draggable.
 		splitSliderClick := false
@@ -289,6 +299,16 @@ func (v *Viewer) Update() error {
 	if rightMousePressed && !v.rightMouseDown {
 		if pointInTopLeftCorner(mouseX, mouseY, cornerCommandTolerance) {
 			v.rotateImage(1)
+			v.rightMouseDown = true
+			return nil
+		}
+		if pointInBottomLeftCorner(mouseX, mouseY, v.windowHeight, cornerCommandTolerance) {
+			v.toggleScreenMirror(false)
+			v.rightMouseDown = true
+			return nil
+		}
+		if pointInBottomRightCorner(mouseX, mouseY, v.windowWidth, v.windowHeight, cornerCommandTolerance) {
+			v.adjustGamma(-1)
 			v.rightMouseDown = true
 			return nil
 		}
