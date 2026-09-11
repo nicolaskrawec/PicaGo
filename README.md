@@ -1,378 +1,162 @@
+<div align="center">
+
 # PicaGo
 
-**A fast, fluid and distraction-free image viewer built for people who want to
-look at images, not fight with an interface.**
+### A fast, fluid, distraction-free image viewer
 
-Inspired by the immediacy of the classic Picasa viewer, PicaGo opens images
-quickly, navigates through folders smoothly and offers a powerful two-image
-comparison workflow without covering the picture with toolbars.
+Browse, inspect, and compare images without toolbars getting in the way.
 
-Use it for everyday browsing, checking a retouch against its original,
-comparing exports, spotting compression differences, or performing fast visual
-QA. The interface stays out of the way until you need it.
+[![Latest release](https://img.shields.io/github/v/release/nicolaskrawec/ViewerGo?display_name=tag&sort=semver)](https://github.com/nicolaskrawec/ViewerGo/releases/latest)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-5b8def)
+![Formats](https://img.shields.io/badge/formats-JPEG%20%7C%20PNG%20%7C%20GIF%20%7C%20WebP%20%7C%20BMP%20%7C%20TIFF-69b578)
 
-## Features
+[Download the latest release](https://github.com/nicolaskrawec/ViewerGo/releases/latest) · [View all releases](https://github.com/nicolaskrawec/ViewerGo/releases)
 
-- Fast image opening and fluid folder navigation.
-- Open an image from the command line or drop images and folders into the window.
-- Navigate through every supported image in the current folder.
-- Browse a centered bottom strip of asynchronously loaded, memory-bounded
-  thumbnails; it appears near the bottom edge, hides after mouse inactivity,
-  and lets you click a neighboring thumbnail to open it directly.
-- Smooth cursor-centered zoom, 100% view, fit-to-window and mouse panning.
-- Animated clockwise and counter-clockwise rotation.
-- Animated horizontal and vertical mirroring.
-- Borderless fullscreen with discreet corner and thumbnail controls.
-- Compare two images with vertical, horizontal or circular masks.
-- Reverse which side or area reveals the comparison image.
-- Image shadow and slider/image synchronization.
-- Compare images with different dimensions and aspect ratios.
-- Drag and drop onto the left or right half of the window to replace image A or
-  B directly.
-- Persistent fit-to-window mode that follows window resizing and fullscreen
-  transitions.
+</div>
 
-## Getting Started
+PicaGo is inspired by the immediacy of the classic Picasa Photo Viewer: open an image, focus on it, and move through a folder with almost no interface in the way.
 
-Open an image by passing its path to PicaGo:
+It is equally at home browsing a photo collection, checking a retouch against the original, comparing exports, spotting compression differences, or carrying out quick visual QA.
 
-```text
-PicaGo photo.jpg
-```
+## Why PicaGo?
 
-You can also start PicaGo without an argument and drag an image into the
-window. With an image already loaded, drop on the left half to replace image A
-or on the right half to replace image B. Dropping a second image activates the
-comparison workflow. Dropping multiple images uses the first two supported
-files as images A and B, while dropping a folder opens its first supported
-image.
+- **Clean by design** — controls stay hidden until you need them.
+- **Fast folder browsing** — move through nearby images with the keyboard or the animated thumbnail strip.
+- **Powerful visual comparison** — compare two images using vertical, horizontal, or circular reveals.
+- **Natural navigation** — zoom around the pointer, pan by dragging, and jump between fit and 100% views.
+- **Useful inspection tools** — view EXIF data and adjust gamma, exposure, contrast, and comparison opacity.
+- **Made for uninterrupted viewing** — borderless fullscreen, configurable backgrounds, and a looping slideshow.
+- **Your view is remembered** — image adjustments and folder sort choices are restored automatically.
 
-Use the left and right arrows, or the thumbnail strip, to browse neighboring
-images in the same directory. The current image stays centered in the strip,
-with previous images on the left and following images on the right.
+## Getting started
 
-## Comparison Mode
+1. Download PicaGo for your platform from the [Releases page](https://github.com/nicolaskrawec/ViewerGo/releases/latest).
+2. Open an image with PicaGo, or launch the app and drag an image into its window.
+3. Use the **Left** and **Right Arrow** keys to browse the rest of the folder.
+4. Move the pointer near the bottom edge to reveal the thumbnail strip.
 
-When a second image is loaded, PicaGo switches to a shared comparison view:
+You can also drop a folder into PicaGo to open its first supported image. Drop two images together to start comparing them immediately.
 
-- Image A stays as the base image.
-- Image B is revealed through a movable split slider.
-- The slider can be vertical or horizontal.
-- The reveal direction can be flipped.
-- `V` selects a vertical split and `H` a horizontal split. Press the active key
-  again to reverse the revealed side.
-- `C` selects a circular mask. Press it again to exchange the inside and outside.
-- The split slider can stay synchronized with image movement while panning.
-- The slider line appears when you are close to it, fades away when idle, and remains visible when it sits on an image edge.
-- Both images, the mask and the slider rotate together.
-- Hold `1` or `2` to inspect either source image on its own.
+## Explore your images
 
-This makes it useful for before/after checks, export verification, retouch comparison, or visual QA between two versions of the same image.
+PicaGo makes everyday viewing feel direct and responsive:
 
-## Screen-edge Controls
+- Scroll to zoom precisely around the mouse pointer.
+- Drag the image to pan around fine details.
+- Press `Z` (`W` on some keyboard layouts) to switch between 100% and fit view.
+- Press `R` to reset the image and keep it fitted as the window changes size.
+- Double-click an image to enter fullscreen; double-click again in fullscreen to switch between 100% and your previous view.
+- Press `F2` to display dimensions and available EXIF metadata.
+- Press `O` to sort the current folder by name, modification date, or creation date, ascending or descending.
+- Press `P` to start or pause a looping slideshow.
 
-PicaGo keeps its interface minimal by exposing actions at the edges of the
-window:
+The thumbnail strip appears when the pointer approaches the bottom of the window and fades away when idle, keeping the image itself front and center.
 
-- Top-left corner: rotate counter-clockwise with left click or wheel up.
-- Top-left corner: rotate clockwise with right click or wheel down.
-- Top-right corner: close the viewer.
-- Bottom-left corner: mirror horizontally with left click or the mouse wheel;
-  mirror vertically with right click.
-- Bottom-right corner: increase gamma with left click or wheel up; decrease it
-  with right click or wheel down.
+## Compare two images
 
-These controls are intentionally lightweight so the viewer can stay mostly chrome-free.
+Drop the first image on the **left half** of the window and the second on the **right half**. PicaGo aligns them in one shared view, even when their dimensions or aspect ratios differ.
 
-## Controls
+Choose the comparison that best suits the detail you are checking:
+
+- `V` — vertical split
+- `H` — horizontal split
+- `C` — circular reveal
+- Press the active comparison key again to reverse the revealed side or area.
+- Drag the split line or circular mask to inspect a specific region.
+- Hold `1` to see image A alone, or hold `2` to see image B alone.
+- Press `L` to keep the split line synchronized while panning.
+- Use `Ctrl + mouse wheel` to change the comparison overlay opacity.
+- In circular mode, use `Ctrl + Shift + mouse wheel` to resize the reveal.
+
+This workflow is especially useful for before/after edits, retouching, upscaling, export settings, compression checks, and visual regression reviews.
+
+## Quick controls
 
 ### Mouse
 
-- `Left drag` on the image: pan.
-- `Mouse wheel`: zoom in and out around the cursor.
-- `Left drag` on the comparison slider: move the split.
-- `Shift + mouse wheel`: adjust gamma.
-- `Alt + mouse wheel`: adjust exposure/brightness.
-- `Ctrl + Alt + mouse wheel`: adjust contrast.
-- `Ctrl + mouse wheel` in comparison mode: change the mask opacity.
-- `Ctrl + Shift + mouse wheel` in circular comparison mode: resize the circular mask.
-- `Double click` on the image: enter fullscreen; while fullscreen, toggle
-  100% / previous zoom and position.
-- `Drag and drop`: load one or two images, or the first image in a folder.
-- `Top-left + left click/wheel up`: rotate 90 degrees counter-clockwise.
-- `Top-left + right click/wheel down`: rotate 90 degrees clockwise.
-- `Top-right + left click`: quit.
-- `Bottom-left + left click/mouse wheel`: mirror horizontally.
-- `Bottom-left + right click`: mirror vertically.
-- `Bottom-right + left click/wheel up`: increase gamma.
-- `Bottom-right + right click/wheel down`: decrease gamma.
-- `Thumbnail strip + left click`: open that image directly.
+| Action | Control |
+|---|---|
+| Zoom around the pointer | `Mouse wheel` |
+| Pan | `Left drag` on the image |
+| Open an image from the thumbnail strip | `Left click` a thumbnail |
+| Browse while over the thumbnail strip | `Mouse wheel` |
+| Enter fullscreen | `Double-click` the image |
+| Adjust gamma | `Shift + mouse wheel` |
+| Adjust exposure / brightness | `Alt + mouse wheel` |
+| Adjust contrast | `Ctrl + Alt + mouse wheel` |
+| Load or compare images | Drag and drop images or a folder |
 
 ### Keyboard
 
-- `Left Arrow`: previous image in the current folder.
-- `Right Arrow`: next image in the current folder.
-- `Up Arrow`: zoom in.
-- `Down Arrow`: zoom out.
-- `Ctrl + Left Arrow`: rotate 90 degrees counter-clockwise.
-- `Ctrl + Right Arrow`: rotate 90 degrees clockwise.
-- `Shift + Left/Right Arrow`: mirror horizontally.
-- `Shift + Up/Down Arrow`: mirror vertically.
-- `R`: reset to fit-to-window and keep fit mode active.
-- `Z` (`W` on some keyboard layouts): toggle 100% / maximum fit, centered on
-  the mouse cursor when switching to 100%.
-- Manual panning or zooming leaves persistent fit mode; resizing then keeps the
-  chosen view instead of refitting it.
-- `F1`: toggle the English help overlay.
-- `F2`: toggle the EXIF metadata overlay for the current image.
-- `F11`: toggle borderless fullscreen.
-- `H`: horizontal split comparison.
-- `V`: vertical split comparison.
-- Press `H` or `V` again: reverse the split direction.
-- `C`: circular comparison mask; press again to invert it.
-- `B`: cycle the background. In fullscreen, this cycles desktop, gray, black
-  and white when the desktop background is available. In a window, or without
-  desktop capture, it cycles gray, black and white.
-- `P`: play/pause a looping slideshow of the images in the current folder.
-- `O`: cycle the current folder's image order between name, modification date
-  and creation date, in ascending and descending order.
-- `L`: toggle slider sync with image movement.
-- `S`: toggle the image shadow.
-- `Shift + mouse wheel`: adjust the gamma correction of the displayed image;
-  in comparison mode, both images are adjusted together.
-- `Alt + mouse wheel`: adjust exposure/brightness.
-- `Ctrl + Alt + mouse wheel`: adjust contrast.
-- `Ctrl + Shift + mouse wheel` in circular comparison mode: resize the circular
-  mask.
-- Hold `1`: show image A only.
-- Hold `2`: show image B only.
-- `Esc`: leave fullscreen, or quit when already in windowed mode.
+| Action | Shortcut |
+|---|---|
+| Previous / next image | `Left Arrow` / `Right Arrow` |
+| Zoom in / out | `Up Arrow` / `Down Arrow` |
+| 100% / fit view | `Z` or `W` |
+| Reset and fit to window | `R` |
+| Rotate left / right | `Ctrl + Left Arrow` / `Ctrl + Right Arrow` |
+| Mirror horizontally | `Shift + Left Arrow` or `Shift + Right Arrow` |
+| Mirror vertically | `Shift + Up Arrow` or `Shift + Down Arrow` |
+| Vertical / horizontal comparison | `V` / `H` |
+| Circular comparison | `C` |
+| Show image A / B only | Hold `1` / `2` |
+| Toggle slider synchronization | `L` |
+| Cycle the background | `B` |
+| Toggle image shadow | `S` |
+| Play / pause slideshow | `P` |
+| Change folder sorting | `O` |
+| Show EXIF metadata | `F2` |
+| Show the in-app help | `F1` |
+| Toggle borderless fullscreen | `F11` |
+| Leave fullscreen / quit | `Esc` |
 
-## Configuration
+## Hidden corner controls
 
-PicaGo stores its per-user settings in `config.json` in the operating system's
-standard configuration directory: `%AppData%\PicaGo` on Windows,
-`$XDG_CONFIG_HOME/PicaGo` (usually `~/.config/PicaGo`) on Linux, and
-`~/Library/Application Support/PicaGo` on macOS. The legacy `PicaGo.json`
-beside the executable is imported automatically on first launch.
+For a nearly chrome-free experience, useful actions are tucked into the corners:
 
-The view parameters changed for individual images are stored separately in
-`image-views.json` in the same directory. They are restored automatically when
-the image is opened again. The file uses compact JSON and indexes settings by
-a fast hash of the normalized absolute path; the path itself is not stored.
-Images without changed parameters are not kept in that file. Older key formats
-are ignored.
+- **Top-left:** rotate left with a left click or wheel up; rotate right with a right click or wheel down.
+- **Top-right:** close PicaGo with a left click.
+- **Bottom-left:** mirror horizontally with a left click or the wheel; mirror vertically with a right click.
+- **Bottom-right:** increase gamma with a left click or wheel up; decrease it with a right click or wheel down.
 
-The image order selected with `O` is stored per folder in
-`folder-settings.json`, alongside `image-views.json`. Folder paths are
-normalized and stored only as SHA-256 hashes, never in clear text. Folders
-without a saved preference are ordered by name.
+## Tips
 
-```json
-{
-  "language": "auto",
-  "desktopBackground": true,
-  "background": "desktop",
-  "showShadow": true,
-  "slideshowIntervalSeconds": 1,
-  "animateOnStart": true,
-  "showDebug": false,
-  "graphicsLibrary": "auto"
-}
-```
+- **Compare in one gesture:** select two images and drag them into PicaGo together.
+- **Replace either comparison image:** drop a new image on the left or right half of the window.
+- **Check the original instantly:** hold `1` or `2` instead of changing comparison modes.
+- **Find the best backdrop:** press `B` to cycle through desktop, gray, black, and white backgrounds. The desktop option is available in fullscreen on Windows.
+- **Inspect adjustments:** when an image has been adjusted, click its small adjustment indicator to see the current values.
+- **Return to a clean view:** press `R` to reset zoom, position, rotation, mirroring, and visual adjustments.
+- **Use the keyboard continuously:** hold the arrow keys for quick browsing or smooth zooming.
 
-- `language`: UI language. The default `auto` follows the operating-system
-  language. Use a BCP 47 language tag such as `de`, `en`, `es`, `fr`, `it` or
-  `pl` to override it.
-  English is used as the fallback for missing or unsupported languages.
-- `desktopBackground`: enable the captured Windows desktop as a fullscreen
-  background option. Press `B` to cycle between it and the gray, black and
-  white backgrounds. Set it to `false` to disable desktop capture.
-- `background`: last selected background: `desktop`, `gray`, `black` or `white`.
-- `showShadow`: show the image shadow.
-- `slideshowIntervalSeconds`: number of seconds between two slideshow images.
-- `animateOnStart`: animate the initial image fit when opening PicaGo.
-- `showDebug`: show the debug/help overlay at startup; `F1` toggles it afterward.
-- `graphicsLibrary`: graphics backend requested at startup: `auto`, `opengl` or
-  `directx`. The default `auto` uses the platform-preferred backend. The backend
-  actually selected is shown in the `F1` overlay.
+## Supported formats
 
-If the file is missing, PicaGo creates it with these default values.
+PicaGo opens:
 
-User-facing text (the `F1` help overlay, center notifications, loading status,
-errors, and translated option labels) lives in `internal/i18n/locales`. English
-English, French, German, Italian, Spanish and Polish are currently available.
-To add a language, copy the English catalog, translate its values without
-changing the keys or formatting verbs, then register its language code in
-`internal/i18n/i18n.go`.
+- JPEG (`.jpg`, `.jpeg`)
+- PNG (`.png`)
+- Animated and still GIF (`.gif`)
+- WebP (`.webp`)
+- BMP (`.bmp`)
+- TIFF (`.tif`, `.tiff`)
 
-## Supported Formats
+## Languages
 
-Currently supported formats:
+PicaGo automatically follows your system language when available. The interface currently includes:
 
-- JPEG
-- PNG
-- GIF
-- WebP
-- BMP
-- TIFF
+- English
+- French
+- German
+- Italian
+- Spanish
+- Polish
 
-## Requirements
+If your language is not available, PicaGo uses English.
 
-- Go installed
-- Git installed for automatic build versioning
-- PowerShell on Windows, or Bash on Linux, for the build scripts
+---
 
-## Run in Development
+<div align="center">
 
-From the project root:
+**Open. Browse. Compare. Nothing in the way.**
 
-```powershell
-go run .
-```
-
-Or with an image:
-
-```powershell
-go run . "C:\path\to\image.jpg"
-```
-
-Without arguments, the app opens in a `640x480` window.
-
-To display the version without opening the viewer:
-
-```powershell
-PicaGo.exe --version
-```
-
-The development equivalent is `go run . --version`.
-
-## Automated Builds
-
-From the project root:
-
-```powershell
-.\scripts\build.ps1
-```
-
-On Linux:
-
-```bash
-chmod +x ./scripts/build.sh
-./scripts/build.sh
-```
-
-The script:
-
-- computes the version automatically from the nearest reachable semantic Git tag
-- validates explicit versions as SemVer and removes their optional `v` prefix
-- injects that version into `viewergo/internal/app.Version`
-- produces multi-platform binaries in `dist/`
-- builds Windows binaries without a visible console window
-- embeds the `.exe` icon from `internal/assets/icon.ico`
-
-Automatic version examples:
-
-- exact tag `v1.2.3` on `HEAD`: `1.2.3`
-- commits after a tag: `1.2.3-4-g6839b09`
-- no reachable tag: `0.0.0-42-g6839b09`
-- local modifications or untracked files: `-dirty` suffix
-
-Windows resources use a separate numeric four-part version. For example,
-`1.2.3-4-g6839b09` is displayed by PicaGo while Windows receives `1.2.3.4`.
-The shared `cmd/buildversion` tool is the single source of this version logic
-for the PowerShell build, Bash build and Windows installer scripts.
-
-Examples:
-
-```powershell
-.\scripts\build.ps1 -Targets windows/amd64
-.\scripts\build.ps1 -Targets windows/amd64 -Goamd64 v3
-.\scripts\build.ps1 -Targets windows/amd64,linux/amd64,darwin/arm64
-.\scripts\build.ps1 -Version v1.3.0
-```
-
-The `-Goamd64 v3` option builds a Windows AMD64 executable optimized for more
-recent processors. It can provide better performance, but the resulting binary
-will not run on older CPUs that do not support the required instruction set.
-Use the default `v1` for maximum compatibility. This option only applies to
-AMD64 targets and accepts `v1`, `v2`, `v3` or `v4`.
-
-Linux/Bash equivalents:
-
-```bash
-./scripts/build.sh --targets linux/amd64
-./scripts/build.sh --targets windows/amd64 --goamd64 v3
-./scripts/build.sh --targets windows/amd64,linux/amd64,darwin/arm64
-./scripts/build.sh --version v1.3.0
-```
-
-For Windows builds, the script uses `goversioninfo` to embed the icon and the
-Windows file properties (`ProductName`, `CompanyName`, `FileDescription`, `FileVersion`,
-`ProductVersion` and `OriginalFilename`).
-Install it once with:
-
-```powershell
-go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
-```
-
-The `internal/assets/icon.ico` file is used:
-
-- as the application window icon
-- as the Windows `.exe` file icon during build
-
-For `windows/amd64`, the build also writes a stable `dist/PicaGo.exe` file in addition to the versioned artifact, which is useful for packaging and local testing.
-
-## Windows Installer
-
-PicaGo can be packaged as a Windows installer with:
-
-```powershell
-.\scripts\build-installer.ps1
-```
-
-This script:
-
-- builds `dist/PicaGo.exe`
-- copies the default `PicaGo.json` configuration next to the executable
-- compiles an Inno Setup installer into `dist/installer`
-- installs the app with the embedded icon
-- registers PicaGo as a handler for supported image formats
-
-Requirements:
-
-- Inno Setup 6 installed
-- `ISCC.exe` available in `PATH` or in the default Inno Setup install directory
-
-Notes about default file opening on Windows 10/11:
-
-- the installer registers PicaGo properly for supported extensions
-- Windows may still require a user confirmation in `Default apps`
-- the installer includes an optional checkbox to open the Windows default apps settings at the end
-
-## Automated Releases
-
-Pushing a semantic version tag triggers `.github/workflows/release.yml`:
-
-```bash
-git tag -a v1.3.0 -m "PicaGo 1.3.0"
-git push origin v1.3.0
-```
-
-After the tests pass, GitHub Actions builds and attaches these files to the
-corresponding GitHub Release:
-
-- a Windows x64 portable executable, Setup executable and MSI installer
-- a Linux x64 Debian package
-- macOS DMG images for Intel and Apple Silicon
-
-The workflow rejects non-semantic tags. The generated packages are currently
-unsigned. Windows code signing and Apple Developer signing/notarization require
-their respective certificates to be configured as GitHub repository secrets.
-
-## Technical Notes
-
-PicaGo is written in Go and uses
-[Ebitengine](https://ebitengine.org/) for its desktop rendering and input loop.
-The build scripts inject version information from Git and can produce Windows,
-Linux and macOS binaries for AMD64 and ARM64.
+</div>
