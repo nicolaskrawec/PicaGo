@@ -62,7 +62,7 @@
   "help.shadow": "S: Schatten %s",
   "help.exif": "F2: EXIF-Metadaten",
   "help.fullscreen": "F11: Vollbild",
-  "help.quit": "Esc: beenden",
+  "help.quit": "Esc: Vollbild verlassen / beenden",
   "help.navigation": "NAVIGATION",
   "help.previous_next": "Links / Rechts: vorheriges / nächstes Bild",
   "help.image_a": "1: %s",

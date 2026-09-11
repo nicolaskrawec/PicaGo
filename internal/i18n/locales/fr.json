@@ -62,7 +62,7 @@
   "help.shadow": "S : ombre %s",
   "help.exif": "F2 : métadonnées EXIF",
   "help.fullscreen": "F11 : plein écran",
-  "help.quit": "Échap : quitter",
+  "help.quit": "Échap : quitter le plein écran / fermer",
   "help.navigation": "NAVIGATION",
   "help.previous_next": "Gauche / Droite : image précédente / suivante",
   "help.image_a": "1 : %s",

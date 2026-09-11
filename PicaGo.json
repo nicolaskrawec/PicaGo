@@ -3,7 +3,7 @@
   "desktopBackground": true,
   "background": "desktop",
   "showShadow": true,
-  "slideshowIntervalSeconds": 1,
+  "slideshowIntervalSeconds": 5,
   "animateOnStart": true,
   "showDebug": false,
   "graphicsLibrary": "auto"

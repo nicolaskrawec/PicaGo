@@ -142,7 +142,7 @@ These controls are intentionally lightweight so the viewer can stay mostly chrom
   mask.
 - Hold `1`: show image A only.
 - Hold `2`: show image B only.
-- `Esc`: quit.
+- `Esc`: leave fullscreen, or quit when already in windowed mode.
 
 ## Configuration
 

@@ -98,7 +98,11 @@ func (v *Viewer) Update() error {
 		}
 	}
 
-	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		if v.borderlessMaximized {
+			v.restoreWindow()
+			return nil
+		}
 		return ebiten.Termination
 	}
 
