@@ -308,6 +308,29 @@ func TestThumbnailsShowOnlyNearBottomWhileCursorIsActive(t *testing.T) {
 	}
 }
 
+func TestThumbnailRevealAreaExtendsAboveThumbnailItems(t *testing.T) {
+	now := time.Now()
+	v := Viewer{
+		imageA:               &imagedata.LoadedImage{},
+		windowWidth:          1000,
+		windowHeight:         700,
+		lastCursorActivityAt: now,
+		thumbnailOpacity:     1,
+	}
+
+	// The reveal area is intentionally taller than the thumbnail rectangles.
+	// Wheel navigation must therefore use shouldShowThumbnails rather than
+	// pointInThumbnailStrip, otherwise this part of the visible frise zooms.
+	x := v.windowWidth / 2
+	y := v.windowHeight - thumbnailRevealDistance
+	if v.pointInThumbnailStrip(x, y) {
+		t.Fatal("test point unexpectedly overlaps a thumbnail item")
+	}
+	if !v.shouldShowThumbnails(now, x, y) {
+		t.Fatal("bottom reveal area should activate thumbnail navigation")
+	}
+}
+
 func TestThumbnailVisibilityFadesInAndOut(t *testing.T) {
 	now := time.Now()
 	v := Viewer{

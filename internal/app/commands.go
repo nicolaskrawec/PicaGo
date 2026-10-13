@@ -377,7 +377,7 @@ func (v *Viewer) Update() error {
 			} else {
 				v.rotateImage(1)
 			}
-		} else if imageReady && v.pointInThumbnailStrip(mouseX, mouseY) {
+		} else if imageReady && v.shouldShowThumbnails(now, mouseX, mouseY) {
 			if wheelDelta > 0 {
 				_ = v.loadAdjacentImage(-1)
 			} else {
