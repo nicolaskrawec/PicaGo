@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,6 +181,37 @@ func TestJPEGScaleDenom(t *testing.T) {
 	for _, test := range tests {
 		if got := jpegScaleDenom(test.longest, test.maxDimension); got != test.want {
 			t.Errorf("jpegScaleDenom(%d, %d) = %d, want %d", test.longest, test.maxDimension, got, test.want)
+		}
+	}
+}
+
+func TestJPEGPreviewHeadersPreserveScaledOrientation(t *testing.T) {
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, stdimage.NewRGBA(stdimage.Rect(0, 0, 512, 256)), nil); err != nil {
+		t.Fatal(err)
+	}
+	for orientation := byte(1); orientation <= 8; orientation++ {
+		data := addEXIFOrientation(encoded.Bytes(), orientation)
+		for _, seekable := range []bool{true, false} {
+			var reader io.Reader = bytes.NewReader(data)
+			if !seekable {
+				reader = struct{ io.Reader }{reader}
+			}
+			decoded, err := decodePreviewFromReader(reader, "oriented.jpg", "oriented.jpg", 64)
+			if err != nil {
+				t.Fatalf("orientation=%d seekable=%v: %v", orientation, seekable, err)
+			}
+			width, height := 512, 256
+			if orientation >= 5 {
+				width, height = height, width
+			}
+			if decoded.Width != width || decoded.Height != height || decoded.Preview.Bounds().Size() != stdimage.Pt(width/8, height/8) {
+				t.Fatalf("orientation=%d seekable=%v: metadata=%dx%d preview=%v", orientation, seekable, decoded.Width, decoded.Height, decoded.Preview.Bounds())
+			}
+			if decoded.Image != nil {
+				t.Fatal("preview retained the original pixels")
+			}
+			decoded.Release()
 		}
 	}
 }

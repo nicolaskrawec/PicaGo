@@ -195,6 +195,19 @@ func (v *Viewer) loadNavigationImage(nextPath string) {
 		return
 	}
 
+	if v.prefetchInFlight[nextPath] {
+		// Reuse the decode already running for this neighbour. Starting another
+		// foreground decode would read and decompress the same JPEG twice.
+		v.nextImageLoadID++
+		v.trackPendingImageLoad(asyncImageSlotA, v.nextImageLoadID)
+		v.pendingPrefetchPath = nextPath
+		v.pendingHighRes[asyncImageSlotA] = nil
+		v.loadingImageName = filepath.Base(nextPath)
+		v.loadError = ""
+		ebiten.SetWindowTitle(windowTitle(v.message("status.loading", v.loadingImageName)))
+		return
+	}
+
 	if droppedFS != nil {
 		v.startAsyncImageFSLoad(droppedFS, nextPath, asyncImageSlotA, true, false)
 	} else {
@@ -318,10 +331,12 @@ func (v *Viewer) prefetchAdjacentImages() {
 	}
 
 	wanted := make(map[string]bool, prefetchedImageCacheLimit)
-	for _, offset := range []int{-1, 1, 2} {
+	paths := make([]string, 0, prefetchedImageCacheLimit)
+	for _, offset := range []int{1, -1, 2, -2} {
 		index := currentIndex + offset
 		if index >= 0 && index < len(images) {
 			wanted[images[index]] = true
+			paths = append(paths, images[index])
 		}
 	}
 
@@ -334,20 +349,27 @@ func (v *Viewer) prefetchAdjacentImages() {
 		}
 	}
 
-	for path := range wanted {
+	for path := range v.prefetchFailed {
+		if !wanted[path] {
+			delete(v.prefetchFailed, path)
+		}
+	}
+	for _, path := range paths {
 		v.startPrefetch(path)
 	}
 }
 
 func (v *Viewer) startPrefetch(path string) {
-	if _, ok := v.prefetchedImages[path]; ok || v.prefetchInFlight[path] {
+	if _, ok := v.prefetchedImages[path]; ok || v.prefetchInFlight[path] || v.prefetchFailed[path] {
+		return
+	}
+	if !v.tryBackgroundDecode() {
 		return
 	}
 	v.prefetchInFlight[path] = true
 	maxDimension := v.previewDimension()
 	droppedFS := v.droppedFolderFSForPath(path)
 	go func() {
-		v.decodeSlots <- struct{}{}
 		var decoded *imagedata.DecodedImage
 		var err error
 		if droppedFS != nil {
@@ -391,7 +413,7 @@ func (v *Viewer) isWantedPrefetchPath(path string) bool {
 	if err != nil || currentIndex < 0 {
 		return false
 	}
-	for _, offset := range []int{-1, 1, 2} {
+	for _, offset := range []int{-2, -1, 1, 2} {
 		index := currentIndex + offset
 		if index >= 0 && index < len(images) && images[index] == path {
 			return true

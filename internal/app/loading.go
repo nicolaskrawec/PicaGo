@@ -24,13 +24,16 @@ func (v *Viewer) startAsyncImageFileLoad(path string, slot asyncImageSlot, reset
 	// result is already invalidated by the new request ID.
 	v.pendingHighRes[slot] = nil
 	v.trackPendingImageLoad(slot, id)
+	cancel := v.imageLoadCancel[slot]
 	v.loadingImageName = filepath.Base(path)
 	v.loadError = ""
 	ebiten.SetWindowTitle(windowTitle(v.message("status.loading", v.loadingImageName)))
 	maxDimension := v.previewDimension()
 
 	go func() {
-		v.decodeSlots <- struct{}{}
+		if !v.acquireImageDecode(cancel) {
+			return
+		}
 		decoded, err := imagedata.DecodeFileForDisplay(path, maxDimension)
 		<-v.decodeSlots
 		v.imageLoadResults <- asyncImageResult{
@@ -54,13 +57,16 @@ func (v *Viewer) startAsyncImageFSLoad(fsys fs.FS, path string, slot asyncImageS
 	id := v.nextImageLoadID
 	v.pendingHighRes[slot] = nil
 	v.trackPendingImageLoad(slot, id)
+	cancel := v.imageLoadCancel[slot]
 	v.loadingImageName = filepath.Base(path)
 	v.loadError = ""
 	ebiten.SetWindowTitle(windowTitle(v.message("status.loading", v.loadingImageName)))
 	maxDimension := v.previewDimension()
 
 	go func() {
-		v.decodeSlots <- struct{}{}
+		if !v.acquireImageDecode(cancel) {
+			return
+		}
 		decoded, err := imagedata.DecodeFSForDisplay(fsys, path, maxDimension)
 		<-v.decodeSlots
 		v.imageLoadResults <- asyncImageResult{
@@ -80,11 +86,48 @@ func (v *Viewer) startAsyncImageFSLoad(fsys fs.FS, path string, slot asyncImageS
 }
 
 func (v *Viewer) trackPendingImageLoad(slot asyncImageSlot, id int) {
+	if cancel := v.imageLoadCancel[slot]; cancel != nil {
+		close(cancel)
+		v.imageLoadCancel[slot] = nil
+	}
+	if id != 0 {
+		v.imageLoadCancel[slot] = make(chan struct{})
+	}
 	switch slot {
 	case asyncImageSlotA:
 		v.pendingImageLoadAID = id
+		v.pendingPrefetchPath = ""
 	case asyncImageSlotB:
 		v.pendingImageLoadBID = id
+	}
+}
+
+// Only foreground requests may wait for a decoder. Superseded requests leave
+// the queue before doing expensive work, even during rapid navigation.
+func (v *Viewer) acquireImageDecode(cancel <-chan struct{}) bool {
+	select {
+	case <-cancel:
+		return false
+	case v.decodeSlots <- struct{}{}:
+	}
+	select {
+	case <-cancel:
+		<-v.decodeSlots
+		return false
+	default:
+		return true
+	}
+}
+
+func (v *Viewer) tryBackgroundDecode() bool {
+	if v.pendingImageLoadAID != 0 || v.pendingImageLoadBID != 0 {
+		return false
+	}
+	select {
+	case v.decodeSlots <- struct{}{}:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -107,19 +150,22 @@ func (v *Viewer) promotePendingHighResImages() {
 		}
 		// Keep the full-resolution decode out of the animated fit period. The
 		// screen-sized preview is sufficient while the image zooms in.
-		if pending.slot == asyncImageSlotA && v.prefetchAfterHighRes == pending.loaded && (v.pendingResetFit || v.viewAnimationActive || v.openingAnimationActive) {
+		if pending.slot == asyncImageSlotA && (v.pendingResetFit || v.viewAnimationActive || v.openingAnimationActive) {
 			continue
 		}
 		current := v.imageA
 		if pending.slot == asyncImageSlotB {
 			current = v.imageB
 		}
-		v.pendingHighRes[i] = nil
 		if current != pending.loaded || pending.loadFull == nil {
+			v.pendingHighRes[i] = nil
 			continue
 		}
+		if !v.tryBackgroundDecode() {
+			continue
+		}
+		v.pendingHighRes[i] = nil
 		go func(pending *pendingHighResImage) {
-			v.decodeSlots <- struct{}{}
 			decoded, err := pending.loadFull()
 			<-v.decodeSlots
 			v.highResResults <- highResImageResult{
@@ -144,10 +190,6 @@ func (v *Viewer) collectHighResolutionImages() {
 			// Uploading copies pixels to the GPU. Never retain the full CPU
 			// decode after this point, including stale and failed requests.
 			result.decoded.Release()
-			if result.slot == asyncImageSlotA && current == result.loaded && v.prefetchAfterHighRes == result.loaded {
-				v.prefetchAfterHighRes = nil
-				v.prefetchAdjacentImages()
-			}
 		default:
 			return
 		}
@@ -170,7 +212,23 @@ func (v *Viewer) collectPrefetchedImages() {
 		select {
 		case result := <-v.prefetchResults:
 			delete(v.prefetchInFlight, result.path)
-			if result.err == nil && result.decoded != nil {
+			if result.err != nil && v.isWantedPrefetchPath(result.path) {
+				v.prefetchFailed[result.path] = true
+			}
+			if result.path == v.pendingPrefetchPath && v.pendingImageLoadAID != 0 {
+				path := result.path
+				droppedFS := v.droppedFolderFSForPath(path)
+				v.applyAsyncImageLoad(asyncImageResult{
+					id: v.pendingImageLoadAID, slot: asyncImageSlotA,
+					decoded: result.decoded, err: result.err, resetView: true, activateFit: true,
+					loadFull: func() (*imagedata.DecodedImage, error) {
+						if droppedFS != nil {
+							return imagedata.DecodeFS(droppedFS, path)
+						}
+						return imagedata.DecodeFile(path)
+					},
+				})
+			} else if result.err == nil && result.decoded != nil && v.isWantedPrefetchPath(result.path) {
 				loaded := imagedata.NewLoadedPreviewImage(result.decoded)
 				result.decoded.Release()
 				v.cachePrefetchedImage(result.path, loaded)
@@ -343,12 +401,9 @@ func (v *Viewer) applyLoadedImage(slot asyncImageSlot, loaded *imagedata.LoadedI
 	v.resetInteractionForLoadedImage()
 	ebiten.SetWindowTitle(windowTitle(loaded.FileName))
 	if slot == asyncImageSlotA {
-		if needsHighResolution {
-			v.prefetchAfterHighRes = loaded
-		} else {
-			v.prefetchAfterHighRes = nil
-			v.prefetchAdjacentImages()
-		}
+		// Prepare the neighbours during the preview/fit period, without waiting
+		// for the much more expensive full-resolution image.
+		v.prefetchAdjacentImages()
 	}
 }
 

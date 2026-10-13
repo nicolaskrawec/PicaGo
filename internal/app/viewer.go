@@ -101,7 +101,7 @@ const adjustmentIndicatorCornerClearance = 60
 const cornerCommandTolerance = 25
 const cornerHintAlpha = 50
 const defaultCircleMaskDiameterRatio = 0.1
-const prefetchedImageCacheLimit = 3
+const prefetchedImageCacheLimit = 4
 const viewChangeAnimationDuration = 250 * time.Millisecond
 const thumbnailMaxDimension = 128
 const thumbnailCacheLimit = 64
@@ -247,6 +247,9 @@ type Viewer struct {
 	highResResults             chan highResImageResult
 	prefetchResults            chan prefetchedImageResult
 	prefetchInFlight           map[string]bool
+	prefetchFailed             map[string]bool
+	pendingPrefetchPath        string
+	imageLoadCancel            [2]chan struct{}
 	decodeSlots                chan struct{}
 	prefetchedImages           map[string]*imagedata.LoadedImage
 	prefetchOrder              []string
@@ -262,7 +265,6 @@ type Viewer struct {
 	thumbnailAnimationStart    time.Time
 	thumbnailAnimationItems    []thumbnailTransitionItem
 	pendingHighRes             [2]*pendingHighResImage
-	prefetchAfterHighRes       *imagedata.LoadedImage
 	navigationDirectory        string
 	navigationImages           []string
 	navigationFS               fs.FS
@@ -323,12 +325,9 @@ func run(args []string, output io.Writer) error {
 		highResResults:      make(chan highResImageResult, 2),
 		prefetchResults:     make(chan prefetchedImageResult, 4),
 		prefetchInFlight:    make(map[string]bool),
-		// Image decoders temporarily allocate the original pixel buffer even
-		// when only a preview is retained. Serializing them bounds that peak to
-		// one full CPU image at a time across display, prefetch and thumbnails.
-		// Allow two independent image decodes to use the CPU concurrently.
-		// This matches the thumbnail worker limit while keeping the temporary
-		// full-resolution memory peak bounded.
+		prefetchFailed:      make(map[string]bool),
+		// Bound concurrent decodes, including formats that allocate full pixels
+		// for previews. Background work only starts when a slot is available.
 		decodeSlots:       make(chan struct{}, 2),
 		prefetchedImages:  make(map[string]*imagedata.LoadedImage),
 		thumbnailResults:  make(chan thumbnailResult, thumbnailCacheLimit),

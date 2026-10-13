@@ -383,10 +383,12 @@ func (v *Viewer) startThumbnailLoad(path string) {
 	if path == "" || v.thumbnailInFlight[path] || len(v.thumbnailInFlight) >= thumbnailWorkerLimit {
 		return
 	}
+	if !v.tryBackgroundDecode() {
+		return
+	}
 	v.thumbnailInFlight[path] = true
 	droppedFS := v.droppedFolderFSForPath(path)
 	go func() {
-		v.decodeSlots <- struct{}{}
 		var thumbnail stdimage.Image
 		var err error
 		if droppedFS != nil {

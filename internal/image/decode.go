@@ -319,16 +319,28 @@ func decodeJPEG(reader io.Reader, fileName, filePath string, maxDimension int) (
 		return result, nil
 	}
 
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
+	// Read only the headers before decoding. Buffer non-seekable sources once;
+	// local files and byte readers can be rewound without copying the JPEG.
+	seeker, ok := reader.(io.ReadSeeker)
+	if !ok {
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			return nil, err
+		}
+		seeker = bytes.NewReader(data)
 	}
 
-	config, err := jpegn.DecodeConfig(bytes.NewReader(data))
+	config, err := jpegn.DecodeConfig(seeker)
 	if err != nil {
 		return nil, err
 	}
-	orientation := jpegEXIFOrientation(data)
+	if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	orientation := jpegEXIFOrientation(seeker)
+	if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
 	decodeOptions := &jpegn.Options{AutoRotate: true}
 	if maxDimension > 0 {
 		longest := max(config.Width, config.Height)
@@ -338,12 +350,15 @@ func decodeJPEG(reader io.Reader, fileName, filePath string, maxDimension int) (
 		}
 	}
 
-	decoded, err := jpegn.Decode(bytes.NewReader(data), decodeOptions)
+	decoded, err := jpegn.Decode(seeker, decodeOptions)
 	decodeMethod := "jpegn"
 	if err != nil {
 		// Keep compatibility with the standard library for uncommon JPEG
 		// variants rejected by jpegn (for example arithmetic-coded files).
-		decoded, err = stdjpeg.Decode(bytes.NewReader(data))
+		if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr != nil {
+			return nil, seekErr
+		}
+		decoded, err = stdjpeg.Decode(seeker)
 		decodeMethod = "image/jpeg"
 		if err != nil {
 			return nil, err
@@ -362,8 +377,8 @@ func decodeJPEG(reader io.Reader, fileName, filePath string, maxDimension int) (
 	return result, nil
 }
 
-func jpegEXIFOrientation(data []byte) int {
-	exif, err := jpegn.DecodeExif(bytes.NewReader(data))
+func jpegEXIFOrientation(reader io.Reader) int {
+	exif, err := jpegn.DecodeExif(reader)
 	if err != nil || exif.Orientation < 1 || exif.Orientation > 8 {
 		return 1
 	}
