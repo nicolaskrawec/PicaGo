@@ -22,7 +22,7 @@ const (
 	thumbnailMaxRadius      = 8
 	thumbnailPreloadRadius  = 16
 	thumbnailMoveDuration   = 280 * time.Millisecond
-	thumbnailFrameAlpha     = 50
+	thumbnailFrameAlpha     = 88
 	thumbnailLeftExclusion  = 20
 	thumbnailRightExclusion = 20
 )
@@ -506,16 +506,27 @@ func (v *Viewer) drawThumbnailFrame(screen *ebiten.Image) {
 	if bounds.Empty() {
 		return
 	}
-	alpha := uint8(math.Round(thumbnailFrameAlpha * clampFloat64(v.thumbnailOpacity, 0, 1)))
-	vector.FillRect(
-		screen,
-		float32(bounds.Min.X),
-		float32(bounds.Min.Y),
-		float32(bounds.Dx()),
-		float32(bounds.Dy()),
-		color.NRGBA{0, 0, 0, alpha},
-		false,
-	)
+	opacity := clampFloat64(v.thumbnailOpacity, 0, 1)
+	// Ease from transparent into a soft shadow, without a visible top edge.
+	// Adjacent one-pixel rows are batched by Ebitengine and need no texture.
+	visibleBounds := bounds.Intersect(screen.Bounds())
+	for y := visibleBounds.Min.Y; y < visibleBounds.Max.Y; y++ {
+		progress := float64(y-bounds.Min.Y) / float64(maxInt(1, bounds.Dy()-1))
+		strength := progress * progress * (3 - 2*progress)
+		alpha := uint8(math.Round(thumbnailFrameAlpha * strength * opacity))
+		if alpha == 0 {
+			continue
+		}
+		vector.FillRect(
+			screen,
+			float32(visibleBounds.Min.X),
+			float32(y),
+			float32(visibleBounds.Dx()),
+			1,
+			color.NRGBA{0, 0, 0, alpha},
+			false,
+		)
+	}
 }
 
 func thumbnailFrameRect(windowWidth, windowHeight int, opacity float64) stdimage.Rectangle {
