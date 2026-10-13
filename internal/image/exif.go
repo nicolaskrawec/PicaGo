@@ -1,6 +1,7 @@
 package image
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -80,4 +81,41 @@ func exifValueText(value any) string {
 	}
 	runes := []rune(text)
 	return string(runes[:maxEXIFValueRunes-1]) + "…"
+}
+
+// ReadCaptureTime reads the original EXIF shooting date without decoding pixels.
+// Missing, invalid, or unsupported metadata returns the zero time.
+func ReadCaptureTime(reader io.Reader, fileName string) time.Time {
+	format, ok := exifImageFormat(fileName)
+	if !ok {
+		return time.Time{}
+	}
+	seeker, ok := reader.(io.ReadSeeker)
+	if !ok {
+		data, err := io.ReadAll(io.LimitReader(reader, 16<<20))
+		if err != nil {
+			return time.Time{}
+		}
+		seeker = bytes.NewReader(data)
+	}
+	var captured time.Time
+	_, err := imagemeta.Decode(imagemeta.Options{
+		R:           seeker,
+		ImageFormat: format,
+		Sources:     imagemeta.EXIF,
+		ShouldHandleTag: func(tag imagemeta.TagInfo) bool {
+			return !strings.HasPrefix(tag.Namespace, "IFD1") && tag.Tag == "DateTimeOriginal"
+		},
+		HandleTag: func(tag imagemeta.TagInfo) error {
+			captured, _ = time.Parse("2006:01:02 15:04:05", strings.TrimRight(fmt.Sprint(tag.Value), "\x00 "))
+			return nil
+		},
+		Timeout:      250 * time.Millisecond,
+		LimitNumTags: 512,
+		LimitTagSize: 4096,
+	})
+	if err != nil {
+		return time.Time{}
+	}
+	return captured
 }

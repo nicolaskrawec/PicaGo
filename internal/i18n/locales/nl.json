@@ -31,6 +31,8 @@
   "sort.name_descending": "naam aflopend",
   "sort.modification_date_ascending": "wijzigingsdatum oplopend",
   "sort.modification_date_descending": "wijzigingsdatum aflopend",
+  "sort.capture_date_ascending": "opnamedatum oplopend",
+  "sort.capture_date_descending": "opnamedatum aflopend",
   "sort.creation_date_ascending": "aanmaakdatum oplopend",
   "sort.creation_date_descending": "aanmaakdatum aflopend",
   "debug.renderer": "Renderer: %s",

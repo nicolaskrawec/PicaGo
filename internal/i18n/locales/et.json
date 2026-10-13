@@ -31,6 +31,8 @@
   "sort.name_descending": "nimi kahanev",
   "sort.modification_date_ascending": "muutmise kuupäev kasvavas järjekorras",
   "sort.modification_date_descending": "muutmise kuupäev kahanevalt",
+  "sort.capture_date_ascending": "võttekuupäev kasvavalt",
+  "sort.capture_date_descending": "võttekuupäev kahanevalt",
   "sort.creation_date_ascending": "loomise kuupäev kasvavas järjekorras",
   "sort.creation_date_descending": "loomise kuupäev kahanevalt",
   "debug.renderer": "Renderdaja: %s",

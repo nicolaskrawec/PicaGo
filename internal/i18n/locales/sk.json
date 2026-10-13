@@ -31,6 +31,8 @@
   "sort.name_descending": "meno zostupne",
   "sort.modification_date_ascending": "dátum úpravy vzostupne",
   "sort.modification_date_descending": "dátum úpravy zostupne",
+  "sort.capture_date_ascending": "dátum nasnímania vzostupne",
+  "sort.capture_date_descending": "dátum nasnímania zostupne",
   "sort.creation_date_ascending": "dátum vytvorenia vzostupne",
   "sort.creation_date_descending": "dátum vytvorenia zostupne",
   "debug.renderer": "Renderer: %s",

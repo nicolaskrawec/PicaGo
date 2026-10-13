@@ -31,6 +31,8 @@
   "sort.name_descending": "nombre descendente",
   "sort.modification_date_ascending": "fecha de modificación ascendente",
   "sort.modification_date_descending": "fecha de modificación descendente",
+  "sort.capture_date_ascending": "fecha de captura ascendente",
+  "sort.capture_date_descending": "fecha de captura descendente",
   "sort.creation_date_ascending": "fecha de creación ascendente",
   "sort.creation_date_descending": "fecha de creación descendente",
   "debug.renderer": "Motor de renderizado: %s",

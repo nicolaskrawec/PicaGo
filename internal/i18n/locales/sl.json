@@ -31,6 +31,8 @@
   "sort.name_descending": "ime padajoče",
   "sort.modification_date_ascending": "datum spremembe naraščajoče",
   "sort.modification_date_descending": "datum spremembe padajoče",
+  "sort.capture_date_ascending": "datum fotografiranja naraščajoče",
+  "sort.capture_date_descending": "datum fotografiranja padajoče",
   "sort.creation_date_ascending": "datum nastanka naraščajoče",
   "sort.creation_date_descending": "datum nastanka padajoče",
   "debug.renderer": "Upodabljalnik: %s",

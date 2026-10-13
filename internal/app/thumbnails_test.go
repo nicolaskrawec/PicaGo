@@ -424,6 +424,8 @@ func TestThumbnailIsClickableDuringFadeInAndGapsAreReserved(t *testing.T) {
 		windowHeight:     700,
 		thumbnailOpacity: 0.35,
 	}
+	v.currentThumbnailItems() // Starts the asynchronous directory scan.
+	waitForNavigationScan(t, &v)
 	items := v.currentThumbnailItems()
 	if len(items) != 3 {
 		t.Fatalf("visible thumbnails = %d, want 3", len(items))
@@ -461,6 +463,8 @@ func TestThumbnailPreloadsSixteenImagesOnEachSide(t *testing.T) {
 		}
 	}
 	v := Viewer{imageA: &imagedata.LoadedImage{FilePath: paths[20]}}
+	v.wantedThumbnailPaths() // Starts the asynchronous directory scan.
+	waitForNavigationScan(t, &v)
 	wanted := v.wantedThumbnailPaths()
 	wantCount := thumbnailPreloadRadius*2 + 1
 	if len(wanted) != wantCount {

@@ -31,6 +31,8 @@
   "sort.name_descending": "ime silazno",
   "sort.modification_date_ascending": "datum izmjene uzlazno",
   "sort.modification_date_descending": "datum izmjene silazno",
+  "sort.capture_date_ascending": "datum snimanja uzlazno",
+  "sort.capture_date_descending": "datum snimanja silazno",
   "sort.creation_date_ascending": "datum stvaranja uzlazno",
   "sort.creation_date_descending": "datum stvaranja silazno",
   "debug.renderer": "Renderer: %s",

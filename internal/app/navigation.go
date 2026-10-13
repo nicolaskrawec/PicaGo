@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path"
@@ -22,6 +23,8 @@ const (
 	imageSortByModificationDateDescending
 	imageSortByCreationDateAscending
 	imageSortByCreationDateDescending
+	imageSortByCaptureDateAscending
+	imageSortByCaptureDateDescending
 	imageSortModeCount
 )
 
@@ -30,6 +33,7 @@ type navigationImage struct {
 	name         string
 	modifiedTime time.Time
 	createdTime  time.Time
+	captureTime  time.Time
 }
 
 func (mode imageSortMode) configValue() string {
@@ -44,6 +48,10 @@ func (mode imageSortMode) configValue() string {
 		return "creationDateAscending"
 	case imageSortByCreationDateDescending:
 		return "creationDateDescending"
+	case imageSortByCaptureDateAscending:
+		return "captureDateAscending"
+	case imageSortByCaptureDateDescending:
+		return "captureDateDescending"
 	default:
 		return "nameAscending"
 	}
@@ -61,6 +69,10 @@ func imageSortModeFromConfig(value string) imageSortMode {
 		return imageSortByCreationDateAscending
 	case "creationDateDescending":
 		return imageSortByCreationDateDescending
+	case "captureDateAscending":
+		return imageSortByCaptureDateAscending
+	case "captureDateDescending":
+		return imageSortByCaptureDateDescending
 	default:
 		return imageSortByNameAscending
 	}
@@ -78,6 +90,10 @@ func (mode imageSortMode) translationKey() string {
 		return "sort.creation_date_ascending"
 	case imageSortByCreationDateDescending:
 		return "sort.creation_date_descending"
+	case imageSortByCaptureDateAscending:
+		return "sort.capture_date_ascending"
+	case imageSortByCaptureDateDescending:
+		return "sort.capture_date_descending"
 	default:
 		return "sort.name_ascending"
 	}
@@ -87,6 +103,16 @@ func sortNavigationImages(images []navigationImage, mode imageSortMode) {
 	sort.SliceStable(images, func(i, j int) bool {
 		left, right := images[i], images[j]
 		switch mode {
+		case imageSortByCaptureDateAscending, imageSortByCaptureDateDescending:
+			if left.captureTime.IsZero() != right.captureTime.IsZero() {
+				return !left.captureTime.IsZero()
+			}
+			if !left.captureTime.Equal(right.captureTime) {
+				if mode == imageSortByCaptureDateDescending {
+					return left.captureTime.After(right.captureTime)
+				}
+				return left.captureTime.Before(right.captureTime)
+			}
 		case imageSortByNameDescending:
 			return left.name > right.name
 		case imageSortByModificationDateAscending:
@@ -130,16 +156,13 @@ func (v *Viewer) cycleImageSort() {
 	}
 	_ = saveFolderSortModes(v.folderSortModes)
 
-	// Rebuild the current directory immediately. The current image is found
-	// again in the reordered list, so changing the order never changes it.
-	if v.navigationFS != nil && v.isDroppedFolderPath(v.imageA.FilePath) {
-		v.setDroppedFolderNavigation(v.navigationFS, v.navigationDirectory)
-	} else {
-		v.navigationDirectory = ""
-		v.navigationImages = nil
+	// Keep the existing order usable while metadata is scanned in the background.
+	var fsys fs.FS
+	if v.isDroppedFolderPath(v.imageA.FilePath) {
+		fsys = v.navigationFS
+		dir = v.navigationDirectory
 	}
-	v.stopThumbnailAnimation()
-	v.prefetchAdjacentImages()
+	v.startNavigationScan(fsys, dir, mode)
 	v.showCenterInfo("notification.sort", v.text(mode.translationKey()))
 }
 
@@ -216,33 +239,28 @@ func (v *Viewer) loadNavigationImage(nextPath string) {
 }
 
 func (v *Viewer) setDroppedFolderNavigation(fsys fs.FS, dir string) []string {
-	entries, err := fs.ReadDir(fsys, dir)
+	v.cancelNavigationScan()
+	mode := v.currentImageSortMode(dir)
+	initialMode := mode
+	if mode != imageSortByNameAscending && mode != imageSortByNameDescending {
+		initialMode = imageSortByNameAscending
+	}
+	images, err := scanNavigationImages(context.Background(), fsys, dir, initialMode)
 	if err != nil {
 		v.clearDroppedFolderNavigation()
 		return nil
 	}
-	items := make([]navigationImage, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || !imagedata.IsSupportedFile(entry.Name()) {
-			continue
-		}
-		item := navigationImage{path: path.Join(dir, entry.Name()), name: entry.Name()}
-		if info, infoErr := entry.Info(); infoErr == nil {
-			item.modifiedTime = info.ModTime()
-		}
-		items = append(items, item)
-	}
-	sortNavigationImages(items, v.currentImageSortMode(dir))
 	v.navigationDirectory = dir
-	v.navigationImages = make([]string, len(items))
-	for i, item := range items {
-		v.navigationImages[i] = item.path
-	}
+	v.navigationImages = images
 	v.navigationFS = fsys
+	if mode != initialMode {
+		v.startNavigationScan(fsys, dir, mode)
+	}
 	return v.navigationImages
 }
 
 func (v *Viewer) clearDroppedFolderNavigation() {
+	v.cancelNavigationScan()
 	v.navigationFS = nil
 	v.navigationDirectory = ""
 	v.navigationImages = nil
@@ -279,36 +297,10 @@ func (v *Viewer) navigationImagePaths(filePath string) ([]string, int, error) {
 	currentName := filepath.Base(filePath)
 
 	if v.navigationDirectory == "" || v.navigationDirectory != dir {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return nil, -1, err
-		}
-
-		mode := v.currentImageSortMode(dir)
-		items := make([]navigationImage, 0, len(entries))
-		for _, entry := range entries {
-			if entry.IsDir() || !imagedata.IsSupportedFile(entry.Name()) {
-				continue
-			}
-			item := navigationImage{
-				path: filepath.Join(dir, entry.Name()),
-				name: entry.Name(),
-			}
-			if mode != imageSortByNameAscending && mode != imageSortByNameDescending {
-				if info, infoErr := entry.Info(); infoErr == nil {
-					item.modifiedTime = info.ModTime()
-					item.createdTime = fileCreationTime(item.path, info)
-				}
-			}
-			items = append(items, item)
-		}
-		sortNavigationImages(items, mode)
-		images := make([]string, len(items))
-		for index, item := range items {
-			images[index] = item.path
-		}
+		v.navigationFS = nil
 		v.navigationDirectory = dir
-		v.navigationImages = images
+		v.navigationImages = []string{filePath}
+		v.startNavigationScan(nil, dir, v.currentImageSortMode(dir))
 	}
 
 	currentIndex := -1
@@ -449,4 +441,105 @@ func (v *Viewer) takePrefetchedImage(path string) *imagedata.LoadedImage {
 		}
 	}
 	return loaded
+}
+
+// Each request has its own buffered result channel. Replaced requests cannot
+// publish into the current request, even if an OS read finishes after cancellation.
+type navigationScanResult struct {
+	images []string
+	err    error
+}
+
+func (v *Viewer) cancelNavigationScan() {
+	if v.navigationScanCancel != nil {
+		v.navigationScanCancel()
+	}
+	v.navigationScanCancel = nil
+	v.navigationScanResults = nil
+}
+
+func (v *Viewer) startNavigationScan(fsys fs.FS, dir string, mode imageSortMode) {
+	v.cancelNavigationScan()
+	ctx, cancel := context.WithCancel(context.Background())
+	results := make(chan navigationScanResult, 1)
+	v.navigationScanCancel = cancel
+	v.navigationScanResults = results
+	go func() {
+		images, err := scanNavigationImages(ctx, fsys, dir, mode)
+		if ctx.Err() != nil {
+			return
+		}
+		results <- navigationScanResult{images: images, err: err}
+		ebiten.ScheduleFrame()
+	}()
+}
+
+func (v *Viewer) collectNavigationScan() {
+	select {
+	case result := <-v.navigationScanResults:
+		v.cancelNavigationScan()
+		if result.err != nil {
+			return
+		}
+		v.navigationImages = result.images
+		v.stopThumbnailAnimation()
+	default:
+	}
+}
+
+func scanNavigationImages(ctx context.Context, fsys fs.FS, dir string, mode imageSortMode) ([]string, error) {
+	var entries []fs.DirEntry
+	var err error
+	if fsys == nil {
+		entries, err = os.ReadDir(dir)
+	} else {
+		entries, err = fs.ReadDir(fsys, dir)
+	}
+	if err != nil {
+		return nil, err
+	}
+	items := make([]navigationImage, 0, len(entries))
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if entry.IsDir() || !imagedata.IsSupportedFile(entry.Name()) {
+			continue
+		}
+		item := navigationImage{name: entry.Name(), path: filepath.Join(dir, entry.Name())}
+		if fsys != nil {
+			item.path = path.Join(dir, entry.Name())
+		}
+		switch mode {
+		case imageSortByModificationDateAscending, imageSortByModificationDateDescending,
+			imageSortByCreationDateAscending, imageSortByCreationDateDescending:
+			if info, err := entry.Info(); err == nil {
+				item.modifiedTime = info.ModTime()
+				if fsys == nil && (mode == imageSortByCreationDateAscending || mode == imageSortByCreationDateDescending) {
+					item.createdTime = fileCreationTime(item.path, info)
+				}
+			}
+		case imageSortByCaptureDateAscending, imageSortByCaptureDateDescending:
+			var file fs.File
+			if fsys == nil {
+				file, err = os.Open(item.path)
+			} else {
+				file, err = fsys.Open(item.path)
+			}
+			if err == nil {
+				item.captureTime = imagedata.ReadCaptureTime(file, item.path)
+				_ = file.Close()
+			}
+		}
+		items = append(items, item)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	sortNavigationImages(items, mode)
+	images := make([]string, len(items))
+	for i, item := range items {
+		images[i] = item.path
+	}
+	return images, nil
 }

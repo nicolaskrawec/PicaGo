@@ -31,6 +31,8 @@
   "sort.name_descending": "név csökkenő",
   "sort.modification_date_ascending": "módosítás dátuma növekvő sorrendben",
   "sort.modification_date_descending": "a módosítás dátuma csökkenő sorrendben",
+  "sort.capture_date_ascending": "felvétel dátuma növekvő",
+  "sort.capture_date_descending": "felvétel dátuma csökkenő",
   "sort.creation_date_ascending": "létrehozás dátuma növekvő sorrendben",
   "sort.creation_date_descending": "a létrehozás dátuma csökkenő sorrendben",
   "debug.renderer": "Renderelő: %s",

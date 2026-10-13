@@ -31,6 +31,8 @@
   "sort.name_descending": "ainm íslitheach",
   "sort.modification_date_ascending": "dáta modhnú ardaitheach",
   "sort.modification_date_descending": "dáta modhnú íslitheach",
+  "sort.capture_date_ascending": "dáta tógála ag dul suas",
+  "sort.capture_date_descending": "dáta tógála ag dul síos",
   "sort.creation_date_ascending": "dáta cruthaithe ag dul suas",
   "sort.creation_date_descending": "dáta cruthú íslitheach",
   "debug.renderer": "Rindreálaí: %s",

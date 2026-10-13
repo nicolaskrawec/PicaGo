@@ -31,6 +31,8 @@
   "sort.name_descending": "isem dixxendenti",
   "sort.modification_date_ascending": "data tal-modifika axxendenti",
   "sort.modification_date_descending": "data tal-modifika dixxendenti",
+  "sort.capture_date_ascending": "data tat-teħid axxendenti",
+  "sort.capture_date_descending": "data tat-teħid dixxendenti",
   "sort.creation_date_ascending": "data tal-ħolqien axxendenti",
   "sort.creation_date_descending": "data tal-ħolqien dixxendenti",
   "debug.renderer": "Renderer: %s",

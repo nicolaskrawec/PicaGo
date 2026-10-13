@@ -31,6 +31,8 @@
   "sort.name_descending": "navn faldende",
   "sort.modification_date_ascending": "ændringsdato stigende",
   "sort.modification_date_descending": "ændringsdatoen falder",
+  "sort.capture_date_ascending": "optagelsesdato stigende",
+  "sort.capture_date_descending": "optagelsesdato faldende",
   "sort.creation_date_ascending": "oprettelsesdatoen stigende",
   "sort.creation_date_descending": "oprettelsesdatoen falder",
   "debug.renderer": "Gengiver: %s",

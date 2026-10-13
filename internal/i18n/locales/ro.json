@@ -31,6 +31,8 @@
   "sort.name_descending": "nume descendent",
   "sort.modification_date_ascending": "data modificării crescător",
   "sort.modification_date_descending": "data modificării descrescătoare",
+  "sort.capture_date_ascending": "data fotografierii crescătoare",
+  "sort.capture_date_descending": "data fotografierii descrescătoare",
   "sort.creation_date_ascending": "data creării crescătoare",
   "sort.creation_date_descending": "data creării descrescătoare",
   "debug.renderer": "Renderer: %s",

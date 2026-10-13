@@ -18,6 +18,7 @@ func (v *Viewer) Update() error {
 	now := time.Now()
 	v.rememberCurrentImageView()
 	v.collectAsyncImageLoads()
+	v.collectNavigationScan()
 	v.collectHighResolutionImages()
 	v.collectPrefetchedImages()
 	v.collectThumbnails()

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"io"
@@ -265,6 +266,8 @@ type Viewer struct {
 	thumbnailAnimationStart    time.Time
 	thumbnailAnimationItems    []thumbnailTransitionItem
 	pendingHighRes             [2]*pendingHighResImage
+	navigationScanCancel       context.CancelFunc
+	navigationScanResults      chan navigationScanResult
 	navigationDirectory        string
 	navigationImages           []string
 	navigationFS               fs.FS

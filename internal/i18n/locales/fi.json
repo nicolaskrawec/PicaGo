@@ -31,6 +31,8 @@
   "sort.name_descending": "nimi laskeva",
   "sort.modification_date_ascending": "muutospäivämäärä nousevassa järjestyksessä",
   "sort.modification_date_descending": "muokkauspäivä laskeva",
+  "sort.capture_date_ascending": "kuvauspäivä nousevasti",
+  "sort.capture_date_descending": "kuvauspäivä laskevasti",
   "sort.creation_date_ascending": "luomispäivämäärä nousevassa järjestyksessä",
   "sort.creation_date_descending": "luontipäivämäärä laskevassa järjestyksessä",
   "debug.renderer": "Renderöijä: %s",

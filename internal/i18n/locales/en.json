@@ -31,6 +31,8 @@
   "sort.name_descending": "name descending",
   "sort.modification_date_ascending": "modification date ascending",
   "sort.modification_date_descending": "modification date descending",
+  "sort.capture_date_ascending": "capture date ascending",
+  "sort.capture_date_descending": "capture date descending",
   "sort.creation_date_ascending": "creation date ascending",
   "sort.creation_date_descending": "creation date descending",
   "debug.renderer": "Renderer: %s",

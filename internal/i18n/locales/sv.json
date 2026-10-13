@@ -31,6 +31,8 @@
   "sort.name_descending": "namn fallande",
   "sort.modification_date_ascending": "ändringsdatum stigande",
   "sort.modification_date_descending": "ändringsdatum fallande",
+  "sort.capture_date_ascending": "fotograferingsdatum stigande",
+  "sort.capture_date_descending": "fotograferingsdatum fallande",
   "sort.creation_date_ascending": "skapelsedatum stigande",
   "sort.creation_date_descending": "skapelsedatum fallande",
   "debug.renderer": "Renderare: %s",

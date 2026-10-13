@@ -31,6 +31,8 @@
   "sort.name_descending": "име низходящо",
   "sort.modification_date_ascending": "дата на промяна във възходящ ред",
   "sort.modification_date_descending": "низходяща дата на модификация",
+  "sort.capture_date_ascending": "дата на заснемане възходящо",
+  "sort.capture_date_descending": "дата на заснемане низходящо",
   "sort.creation_date_ascending": "възходящо дата на създаване",
   "sort.creation_date_descending": "датата на създаване в низходящ ред",
   "debug.renderer": "Renderer: %s",

@@ -31,6 +31,8 @@
   "sort.name_descending": "nazwa malejąco",
   "sort.modification_date_ascending": "data modyfikacji rosnąco",
   "sort.modification_date_descending": "data modyfikacji malejąco",
+  "sort.capture_date_ascending": "data wykonania rosnąco",
+  "sort.capture_date_descending": "data wykonania malejąco",
   "sort.creation_date_ascending": "data utworzenia rosnąco",
   "sort.creation_date_descending": "data utworzenia malejąco",
   "debug.renderer": "Mechanizm renderowania: %s",

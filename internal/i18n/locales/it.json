@@ -31,6 +31,8 @@
   "sort.name_descending": "nome decrescente",
   "sort.modification_date_ascending": "data di modifica crescente",
   "sort.modification_date_descending": "data di modifica decrescente",
+  "sort.capture_date_ascending": "data di scatto crescente",
+  "sort.capture_date_descending": "data di scatto decrescente",
   "sort.creation_date_ascending": "data di creazione crescente",
   "sort.creation_date_descending": "data di creazione decrescente",
   "debug.renderer": "Motore di rendering: %s",

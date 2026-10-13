@@ -31,6 +31,8 @@
   "sort.name_descending": "nosaukums dilstošs",
   "sort.modification_date_ascending": "modifikācijas datums augošā secībā",
   "sort.modification_date_descending": "modifikācijas datums dilstošā secībā",
+  "sort.capture_date_ascending": "uzņemšanas datums augoši",
+  "sort.capture_date_descending": "uzņemšanas datums dilstoši",
   "sort.creation_date_ascending": "izveides datums augošā secībā",
   "sort.creation_date_descending": "izveides datums dilstošā secībā",
   "debug.renderer": "Renderētājs: %s",

@@ -31,6 +31,8 @@
   "sort.name_descending": "jméno sestupně",
   "sort.modification_date_ascending": "datum změny vzestupně",
   "sort.modification_date_descending": "datum úpravy sestupně",
+  "sort.capture_date_ascending": "datum pořízení vzestupně",
+  "sort.capture_date_descending": "datum pořízení sestupně",
   "sort.creation_date_ascending": "datum vytvoření vzestupně",
   "sort.creation_date_descending": "datum vytvoření sestupně",
   "debug.renderer": "Renderer: %s",

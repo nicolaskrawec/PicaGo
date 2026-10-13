@@ -31,6 +31,8 @@
   "sort.name_descending": "όνομα φθίνουσα",
   "sort.modification_date_ascending": "ημερομηνία τροποποίησης αύξουσα",
   "sort.modification_date_descending": "φθίνουσα ημερομηνία τροποποίησης",
+  "sort.capture_date_ascending": "ημερομηνία λήψης αύξουσα",
+  "sort.capture_date_descending": "ημερομηνία λήψης φθίνουσα",
   "sort.creation_date_ascending": "ημερομηνία δημιουργίας αύξουσα",
   "sort.creation_date_descending": "φθίνουσα ημερομηνία δημιουργίας",
   "debug.renderer": "Renderer: %s",

@@ -31,6 +31,8 @@
   "sort.name_descending": "pavadinimas mažėjantis",
   "sort.modification_date_ascending": "pakeitimo data didėjančia tvarka",
   "sort.modification_date_descending": "modifikavimo data mažėjančia tvarka",
+  "sort.capture_date_ascending": "fotografavimo data didėjančiai",
+  "sort.capture_date_descending": "fotografavimo data mažėjančiai",
   "sort.creation_date_ascending": "sukūrimo data didėjimo tvarka",
   "sort.creation_date_descending": "sukūrimo data mažėjančia tvarka",
   "debug.renderer": "Atvaizduotojas: %s",
